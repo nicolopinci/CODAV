@@ -19,13 +19,22 @@ import dash_table
 covid_data = None
 dimensions = []
 
-external_stylesheets = ['style.css']
+external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
+external_scripts = ["static/moveGraphs.js"]
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
+
+
+# Serving local static files
+@app.server.route('/static/<path:path>')
+def static_file(path):
+    static_folder = os.path.join(os.getcwd(), 'static')
+    return send_from_directory(static_folder, path)
+
 
 # see https://plotly.com/python/px-arguments/ for more options
 
-project_name = "CODAVIS"
+project_name = "CODAV"
 
 app.layout = html.Div(
     id="top_container",
@@ -98,11 +107,17 @@ def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
    
     fig = px.scatter(covid_data, x=x_col, y=y_col, color=color_data)
 
-    graph = dcc.Graph(figure=fig)
 
+    graph = dcc.Graph(figure=fig)
     graph.className = "graph"
 
-    old_output.children.append(graph)
+    move_button = html.I("")
+    move_button.className = "moveGraph fas fa-arrows-alt"
+
+    graph_div = html.Div(className="graph_div", children=[move_button])
+    graph_div.children.append(graph)
+
+    old_output.children.append(graph_div)
 
     return old_output
 

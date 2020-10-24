@@ -1,0 +1,9 @@
+.moveGraph {
+    position: absolute;
+    padding: 5px;
+    border: 1px solid black;
+    border-radius: 20px;
+    position: center;
+    z-index: 1000;
+    cursor: pointer;
+}
