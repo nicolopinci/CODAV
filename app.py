@@ -15,6 +15,8 @@ import dash_html_components as html
 import plotly.express as px
 import pandas as pd
 import dash_table
+import dash_daq as daq
+import dash_draggable
 
 covid_data = None
 dimensions = []
@@ -39,6 +41,7 @@ project_name = "CODAV"
 app.layout = html.Div(
     id="top_container",
     children=[
+
 	    dcc.Upload(
         id='upload-data',
         children=html.Div([
@@ -106,18 +109,18 @@ def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
 
 
     graph = dcc.Graph(figure=fig)
-    graph.className = "graph"
+    graph.className = "graph_div graph"
 
     move_button = html.I("")
     move_button.className = "moveGraph fas fa-arrows-alt"
+    #className="graph_div"
 
-    graph_div = html.Div(className="graph_div", children=[move_button])
+    graph_div = dash_draggable.dash_draggable(axis="both", grid=[1, 1], children=[move_button])
     graph_div.children.append(graph)
 
     old_output.children.append(graph_div)
 
     return old_output
-
 
 
 
