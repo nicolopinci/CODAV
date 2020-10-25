@@ -1,3 +1,8 @@
+@font-face {
+    font-family: Elianto;
+    src: url(Elianto-Regular.ttf);
+}
+
 .moveGraph {
     position: absolute;
     padding: 5px;
@@ -6,4 +11,70 @@
     position: center;
     z-index: 1000;
     cursor: pointer;
+    margin: -10px;
+    background-color: white;
+}
+
+.graph {
+    border: 1px solid rgb(200, 200, 200);
+    resize: both;
+    overflow: auto;
+}
+
+body {
+    background-color: rgb(223, 223, 223);
+    margin-left: 20px;
+    margin-right: 20px;
+}
+
+::selection {
+    background: black;
+    color: white;
+}
+
+::-moz-selection {
+    background: black;
+    color: white;
+}
+
+#upload-data, #add-graph {
+    width: 40px;
+    height: 40px;
+    padding: 5px;
+    border: 1px solid rgb(120, 120, 120);
+    border-radius: 5px;
+    font-size: 40px;
+    position: fixed;
+    background-color: white;
+    z-index: 10000;
+    cursor: pointer;
+    top: 10px;
+}
+
+#upload-data {
+    right: 20px;
+    border-style: dashed;
+}
+
+#add-graph {
+    right: 80px;
+}
+
+
+#upload-data:hover, #add-graph:hover, .moveGraph:hover {
+    animation: invert-colors 500ms forwards;
+}
+
+@keyframes invert-colors {
+    from {filter: invert(0);}
+    to {filter: invert(1);}
+}
+
+h1 .fas {
+    color: rgb(141, 33, 10) !important;
+}
+
+h1 span {
+    font-family: Elianto;
+
 }

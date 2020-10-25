@@ -42,27 +42,24 @@ app.layout = html.Div(
 	    dcc.Upload(
         id='upload-data',
         children=html.Div([
-            'Drag and Drop or ',
-            html.A('Select Files')
+            html.I("", className="fas fa-upload")
         ]),
-        style={
-            'width': '100%',
-            'height': '60px',
-            'lineHeight': '60px',
-            'borderWidth': '1px',
-            'borderStyle': 'dashed',
-            'borderRadius': '5px',
-            'textAlign': 'center',
-            'margin': '10px'
-        },
+       
         # Do not allow multiple files to be uploaded
         multiple=False
         ),
 
-        html.Div(id='output-data-upload'),
-        html.H1(children=project_name),
-        #html.Button("Add graph", id='load-new-content', n_clicks=0)
 
+
+        html.Div(id='output-data-upload'),
+        html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)]),
+        
+        html.A(
+            id='add-graph',
+            children=html.Div([
+                html.I("", className="fas fa-plus")
+            ])
+        )
     ],
 )
 
