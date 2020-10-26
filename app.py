@@ -107,15 +107,16 @@ def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
    
     fig = px.scatter(covid_data, x=x_col, y=y_col, color=color_data)
 
-
     graph = dcc.Graph(figure=fig)
     graph.className = "graph_div graph"
 
+    resize_button = html.I("")
+    resize_button.className = "resizeGraph fas fa-expand-alt"
+
     move_button = html.I("")
     move_button.className = "moveGraph fas fa-arrows-alt"
-    #className="graph_div"
 
-    graph_div = dash_draggable.dash_draggable(axis="both", grid=[1, 1], children=[move_button])
+    graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
     graph_div.children.append(graph)
 
     old_output.children.append(graph_div)
