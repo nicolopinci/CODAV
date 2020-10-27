@@ -18,6 +18,8 @@ import dash_table
 import dash_daq as daq
 import dash_draggable
 
+import plotly.graph_objs as go
+
 covid_data = None
 dimensions = []
 
@@ -52,7 +54,7 @@ app.layout = html.Div(
         multiple=False
         ),
 
-
+       
 
         html.Div(id='output-data-upload'),
         html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)]),
@@ -77,6 +79,7 @@ def parse_contents(contents):
         covid_data = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
         col_options = [dict(label=x, value=x) for x in covid_data.columns]
         app.layout = new_scatter(app.layout, covid_data, "location", "total_cases", "new_deaths")
+        app.layout = create_filtered(app.layout, covid_data)
 
     except Exception as e:
         print(e)
@@ -125,6 +128,34 @@ def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
 
 
 
+
+def create_filtered(old_output, covid_data):
+    
+    dropdown_menu = dcc.Dropdown(value='Norway', options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=False)
+
+    print(dropdown_menu)
+    #dropdown = covid_data[covid_data['location'] == date_picker_value]
+    filtered_data = covid_data[covid_data["location"] == dropdown_menu.value]
+    fig = px.scatter(filtered_data, x="date", y="new_cases")
+
+    graph = dcc.Graph(figure=fig)
+    graph.className = "graph_div graph"
+
+    resize_button = html.I("")
+    resize_button.className = "resizeGraph fas fa-expand-alt"
+
+    move_button = html.I("")
+    move_button.className = "moveGraph fas fa-arrows-alt"
+
+
+    graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
+    graph_div.children.append(dropdown_menu)
+    graph_div.children.append(graph)
+
+    old_output.children.append(graph_div)
+
+    return old_output
+    
 
 if __name__ == '__main__':
     app.run_server(debug=True)
