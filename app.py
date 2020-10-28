@@ -19,6 +19,7 @@ import dash_daq as daq
 import dash_draggable
 
 import plotly.graph_objs as go
+from dash.exceptions import PreventUpdate
 
 covid_data = None
 dimensions = []
@@ -64,22 +65,33 @@ app.layout = html.Div(
             children=html.Div([
                 html.I("", className="fas fa-plus")
             ])
-        )
+        ),
+
+        html.Div(id="graphs_container", children=[]),
+
+        # Hidden div inside the app that stores the intermediate value
+        html.Div(id='saved_data', style={'display': 'none'})
     ],
 )
 
 
 
 def parse_contents(contents):
+    print("parsing contents")
     content_type, content_string = contents.split(',')
 
     decoded = base64.b64decode(content_string)
 
     try:
-        covid_data = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-        col_options = [dict(label=x, value=x) for x in covid_data.columns]
-        app.layout = new_scatter(app.layout, covid_data, "location", "total_cases", "new_deaths")
-        app.layout = create_filtered(app.layout, covid_data)
+        df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
+        
+        #col_options = [dict(label=x, value=x) for x in df.columns]
+        #app.layout = new_scatter(app.layout, covid_data, "location", "total_cases", "new_deaths")
+        #app.layout = create_filtered(app.layout, covid_data)
+        #return daily_new_per_population_country(covid_data)
+
+        return df.to_json(date_format='iso', orient='split')
+
 
     except Exception as e:
         print(e)
@@ -90,21 +102,15 @@ def parse_contents(contents):
 
 
 
-@app.callback(Output('output-data-upload', 'children'),
+@app.callback(Output('saved_data', 'children'),
               [Input('upload-data', 'contents')])
+def update_output(contents):
+    if contents is not None:
+        return parse_contents(contents)
+    else:
+        raise dash.exceptions.PreventUpdate
 
-def update_output(content):
 
-    if content is not None:
-        parse_contents(content)
-
-
-'''
-@app.callback(
-    Output('top_container','children'),
-    [Input('load-new-content','n_clicks')],
-    [State('top_container','children')])
-'''
 
 def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
    
@@ -156,6 +162,48 @@ def create_filtered(old_output, covid_data):
 
     return old_output
     
+@app.callback(Output("graphs_container", "children"), [Input("saved_data", "children")])
+def daily_new_per_population_country(jsonified_data):
+
+    covid_data = pd.read_json(jsonified_data, orient="split")
+
+    identifier = "daily_new_population_per_country"
+    dropdown_menu = dcc.Dropdown(id='DD_' + identifier, value='Norway', options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=False)
+
+    #dropdown = covid_data[covid_data['location'] == date_picker_value]
+    filtered_data = covid_data[covid_data["location"] == dropdown_menu.value]
+    
+    fig = px.line(filtered_data, x="date", y="new_cases_per_million")
+
+    graph = dcc.Graph(id="GR_" + identifier, figure=fig)
+    graph.className = "graph_div graph"
+
+    resize_button = html.I("")
+    resize_button.className = "resizeGraph fas fa-expand-alt"
+
+    move_button = html.I("")
+    move_button.className = "moveGraph fas fa-arrows-alt"
+
+
+    graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
+    graph_div.children.append(dropdown_menu)
+    graph_div.children.append(graph)
+
+    return graph_div
+
+@app.callback( 
+Output(component_id='GR_daily_new_population_per_country', component_property='figure'), 
+    [Input(component_id='DD_daily_new_population_per_country', component_property='value')]) 
+def update_graph(filter_value):
+    print(filter_value)
+    if(covid_data is not None):
+        filtered_data = covid_data[covid_data["location"] == filter_value]
+        return px.line(filtered_data, x="date", y="new_cases_per_million")
+    else:
+        raise dash.exceptions.PreventUpdate
+
+
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
