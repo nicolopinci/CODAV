@@ -8,7 +8,7 @@ import datetime
 import io
 
 import dash
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output, State, MATCH
 
 import dash_core_components as dcc
 import dash_html_components as html
@@ -84,12 +84,7 @@ def parse_contents(contents):
 
     try:
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-        
-        #col_options = [dict(label=x, value=x) for x in df.columns]
-        #app.layout = new_scatter(app.layout, covid_data, "location", "total_cases", "new_deaths")
-        #app.layout = create_filtered(app.layout, covid_data)
-        #return daily_new_per_population_country(covid_data)
-
+      
         return df.to_json(date_format='iso', orient='split')
 
 
@@ -161,21 +156,38 @@ def create_filtered(old_output, covid_data):
     old_output.children.append(graph_div)
 
     return old_output
+
     
 @app.callback(Output("graphs_container", "children"), [Input("saved_data", "children")])
-def daily_new_per_population_country(jsonified_data):
+def add_preset(jsonified_data):
 
+    print("Adding PRESET")
+    ind = 0
+    graph_div = new_population_per_country(jsonified_data, "location", "date", "new_cases_per_million", ind)
+    ind = 1
+    graph_div.children.append(new_population_per_country(jsonified_data, "location", "date", "new_deaths_per_million", ind))
+    
+    return graph_div
+
+def new_population_per_country(jsonified_data, column_filter, x_col, y_col, ind):
+    print(ind)
     covid_data = pd.read_json(jsonified_data, orient="split")
 
-    identifier = "daily_new_population_per_country"
-    dropdown_menu = dcc.Dropdown(id='DD_' + identifier, value='Norway', options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=False)
+    dropdown_menu = dcc.Dropdown(id={'type': 'DD', 'index': ind}, value=['Norway'], options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=True)
 
-    #dropdown = covid_data[covid_data['location'] == date_picker_value]
-    filtered_data = covid_data[covid_data["location"] == dropdown_menu.value]
+    filtered_data = covid_data[covid_data[column_filter] == dropdown_menu.value[0]]
     
-    fig = px.line(filtered_data, x="date", y="new_cases_per_million")
+    fig = px.line(filtered_data, x=x_col, y=y_col)
 
-    graph = dcc.Graph(id="GR_" + identifier, figure=fig)
+    select_quantity = dcc.RadioItems(options=[
+        {'label': 'Confirmed cases', 'value': 'cases'},
+        {'label': 'Confirmed deaths', 'value': 'deaths'}
+        ],
+        value='deaths',
+       id={'type': 'RD', 'index': ind}
+    )
+
+    graph = dcc.Graph(id={'type': 'GR', 'index': ind})
     graph.className = "graph_div graph"
 
     resize_button = html.I("")
@@ -186,19 +198,33 @@ def daily_new_per_population_country(jsonified_data):
 
 
     graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
+    
     graph_div.children.append(dropdown_menu)
     graph_div.children.append(graph)
+    graph_div.children.append(select_quantity)
 
     return graph_div
 
+
+
 @app.callback( 
-Output(component_id='GR_daily_new_population_per_country', component_property='figure'), 
-    [Input(component_id='DD_daily_new_population_per_country', component_property='value')]) 
-def update_graph(filter_value):
-    print(filter_value)
+Output({'type': 'GR', 'index': MATCH}, component_property='figure'), 
+    [Input({'type':'DD', 'index': MATCH}, component_property='value'),
+    Input({'type':'RD',  'index': MATCH}, component_property='value'),
+    Input("saved_data", "children")]) 
+def update_graph(filter_value, radio_value, jsonified_data):
+    covid_data = pd.read_json(jsonified_data, orient="split")
+
+    fig = px.line(title = "Number of " + radio_value + " per million people through time")
+    fig.update_layout(xaxis_title='Date', yaxis_title="New " + radio_value + " per million people")
+
     if(covid_data is not None):
-        filtered_data = covid_data[covid_data["location"] == filter_value]
-        return px.line(filtered_data, x="date", y="new_cases_per_million")
+
+        for i in range(0, len(filter_value)):
+            filtered_data = covid_data[covid_data["location"] == filter_value[i]]
+            fig.add_trace(go.Scatter(x=filtered_data["date"], y=filtered_data["new_" + radio_value + "_per_million"], name=filter_value[i], showlegend=True))
+        
+        return fig
     else:
         raise dash.exceptions.PreventUpdate
 
