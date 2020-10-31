@@ -55,8 +55,6 @@ app.layout = html.Div(
         multiple=False
         ),
 
-       
-
         html.Div(id='output-data-upload'),
         html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)]),
         
@@ -107,70 +105,22 @@ def update_output(contents):
 
 
 
-def new_scatter(old_output, covid_data, x_col, y_col, color_data=None):
-   
-    fig = px.scatter(covid_data, x=x_col, y=y_col, color=color_data)
 
-    graph = dcc.Graph(figure=fig)
-    graph.className = "graph_div graph"
-
-    resize_button = html.I("")
-    resize_button.className = "resizeGraph fas fa-expand-alt"
-
-    move_button = html.I("")
-    move_button.className = "moveGraph fas fa-arrows-alt"
-
-    graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
-    graph_div.children.append(graph)
-
-    old_output.children.append(graph_div)
-
-    return old_output
-
-
-
-
-def create_filtered(old_output, covid_data):
-    
-    dropdown_menu = dcc.Dropdown(value='Norway', options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=False)
-
-    print(dropdown_menu)
-    #dropdown = covid_data[covid_data['location'] == date_picker_value]
-    filtered_data = covid_data[covid_data["location"] == dropdown_menu.value]
-    fig = px.scatter(filtered_data, x="date", y="new_cases")
-
-    graph = dcc.Graph(figure=fig)
-    graph.className = "graph_div graph"
-
-    resize_button = html.I("")
-    resize_button.className = "resizeGraph fas fa-expand-alt"
-
-    move_button = html.I("")
-    move_button.className = "moveGraph fas fa-arrows-alt"
-
-
-    graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children=[move_button, resize_button])
-    graph_div.children.append(dropdown_menu)
-    graph_div.children.append(graph)
-
-    old_output.children.append(graph_div)
-
-    return old_output
 
     
 @app.callback(Output("graphs_container", "children"), [Input("saved_data", "children")])
 def add_preset(jsonified_data):
 
-    print("Adding PRESET")
+    graph_divs = []
     ind = 0
-    graph_div = new_population_per_country(jsonified_data, "location", "date", "new_cases_per_million", ind)
+    graph_divs.append(new_population_per_country(jsonified_data, "location", "date", "new_cases_per_million", ind))
     ind = 1
-    graph_div.children.append(new_population_per_country(jsonified_data, "location", "date", "new_deaths_per_million", ind))
+    graph_divs.append(new_population_per_country(jsonified_data, "location", "date", "new_deaths_per_million", ind))
     
-    return graph_div
+    return graph_divs
 
 def new_population_per_country(jsonified_data, column_filter, x_col, y_col, ind):
-    print(ind)
+    
     covid_data = pd.read_json(jsonified_data, orient="split")
 
     dropdown_menu = dcc.Dropdown(id={'type': 'DD', 'index': ind}, value=['Norway'], options = [{'label': i, 'value': i} for i in covid_data["location"].unique()], multi=True)
