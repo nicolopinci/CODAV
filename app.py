@@ -37,7 +37,7 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 
 class GraphInfo:
-    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None):
+    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland'):
         self.title = title 
         self.axes = axes
         self.color = color
@@ -45,14 +45,18 @@ class GraphInfo:
         self.animation = animation
         self.graph_type = graph_type
         self.dataset = dataset
+        self.map_type = map_type
+        self.location_mode = location_mode
+        self.colorscale = colorscale
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 class Axis:
-    def __init__(self, label = "", log_scale = False, content = ""):
+    def __init__(self, label = "", log_scale = False, content = [], labels = []):
         self.label = label
         self.log_scale = log_scale
         self.content = content
+        self.labels = labels
 
 class Filter:
     def __init__(self, column_name = "", default_value = None, multi = True):
@@ -153,21 +157,125 @@ def add_preset(jsonified_data):
 
     graph_divs = []
  
+    
+    # Graph 1: new deaths per million people
     axes = []
     axes.append(Axis("x", True, 'data["date"]'))
-    axes.append(Axis("y", True, 'data["new_deaths_per_million"]'))
+    axes.append(Axis("y", True, ['data["new_deaths_per_million"]'], ["New deaths"]))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
-    filters.append(Filter(default_value = ["Canada"], column_name = "location", multi = True))
 
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Deaths per million", axes = axes, filters = filters))
         
-    graph_divs.append(new_custom_graph(0))
-    return graph_divs
+    graph_divs.append(new_custom_graph())
+    
+    
+    # Graph 2: new tests, confirmed cases, deaths per million people
+    axes = []
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, ['data["new_tests_per_thousand"]*1000', 'data["new_cases_per_million"]', 'data["new_deaths_per_million"]'], ["New tests", "New cases", "New deaths"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New tests, confirmed cases and deaths per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    # Graph 3: cumulative tests, confirmed cases, deaths per million people
+    axes = []
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Cumulative tests, confirmed cases and deaths per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+    # 4: Map with deaths per million
+    axes = []
+    axes.append(Axis("x", True, 'data["location"]'))
+    axes.append(Axis("y", True, ['data["total_deaths_per_million"]'], ["Total deaths per million"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total deaths per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_map())
+
+
+    # 5: Map with cases per million
+    axes = []
+    axes.append(Axis("x", True, 'data["location"]'))
+    axes.append(Axis("y", True, ['data["total_cases_per_million"]'], ["Total cases per million"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total cases per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_map())
+
+
+
+    # Initialize preset container and return
+    preset_container = html.Div(children = graph_divs)
+    return [preset_container]
     
 
-def new_custom_graph(ind):
+def new_custom_map():
+    ind = len(graph_infos)-1
+    graph_info = graph_infos[ind]
+    covid_data = pd.read_json(graph_info.dataset, orient="split")
+    map_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
+
+    subindex = 0
+    for f in graph_info.filters:
+        dropdown_menu = dcc.Dropdown(id={'type': 'DD', 'index': ind, 'internal_index': subindex}, value=f.default_value, options = [{'label': i, 'value': i} for i in covid_data[f.column_name].unique()], multi=f.multi)
+        map_div.children.append(dropdown_menu)
+        data = covid_data
+
+        for defv in f.default_value:
+            data = data[data[f.column_name] == defv]
+
+        subindex += 1
+
+
+
+    data = dict(type = graph_info.map_type,
+        locations = eval(graph_info.axes[0].content).values,
+        locationmode = graph_info.location_mode,
+        colorscale = graph_info.colorscale,
+        text = eval(graph_info.axes[0].content).values,
+        z = eval(graph_info.axes[1].content[0]).values,
+        colorbar = {'title': graph_info.axes[1].labels[0]})
+
+    
+    fig = go.Figure(layout = {'title': graph_info.title}, data = [data])
+    
+    graph = dcc.Graph(id={'type': 'MA', 'index': ind}, figure=fig)
+    graph.className = "graph_div graph map"
+
+    resize_button = html.I("")
+    resize_button.className = "resizeGraph fas fa-expand-alt"
+
+    move_button = html.I("")
+    move_button.className = "moveGraph fas fa-arrows-alt"
+
+    map_div.children.append(move_button)
+    map_div.children.append(resize_button)
+    map_div.children.append(graph)
+
+    return map_div
+
+
+def new_custom_graph():
+    ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
 
@@ -183,10 +291,15 @@ def new_custom_graph(ind):
         for defv in f.default_value:
             data = data[data[f.column_name] == defv]
 
-        fig.add_trace(go.Scatter(x=eval(graph_info.axes[0].content), y=eval(graph_info.axes[1].content)))
+        for lab in range(0, len(graph_info.axes[1].content)):
+            y_trace = graph_info.axes[1].content[lab]
+            label = graph_info.axes[1].labels[lab]
+            if(len(f.default_value) > 1):
+                label += ", " + defv
+            fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
         subindex += 1
 
-    graph = dcc.Graph(id={'type': 'GR', 'index': ind})
+    graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
 
     resize_button = html.I("")
@@ -226,13 +339,23 @@ def update_graph(filter_value, filter_id, jsonified_data):
             for j in range(0, len(filter_value[i])):
                 f = graph_info.filters[i]
                 data = covid_data[covid_data[f.column_name] == filter_value[i][j]]
-                fig.add_trace(go.Scatter(name=filter_value[i][j], x=eval(graph_info.axes[0].content), y=eval(graph_info.axes[1].content)))
+                
+                
+                for lab in range(0, len(graph_info.axes[1].content)):
+
+                    for y_trace in graph_info.axes[1].content:
+                        y_trace = graph_info.axes[1].content[lab]
+                        label = graph_info.axes[1].labels[lab]
+                        label += ", " + filter_value[i][j]
+                    
+                    fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+
 
         return fig
     else:
         raise dash.exceptions.PreventUpdate
 
-        
+
 
 
     
