@@ -19,17 +19,22 @@ import dash_table
 import dash_daq as daq
 import dash_draggable
 import json
+import pickle
 
 import plotly.graph_objs as go
 from dash.exceptions import PreventUpdate
 
 covid_data = None
 dimensions = []
+graph_infos = []
+
 
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
 external_scripts = ["static/moveGraphs.js"]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
+
+
 
 class GraphInfo:
     def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None):
@@ -100,6 +105,7 @@ def generate_layout():
         ),
 
         html.Div(id="graphs_container", children=[]),
+        html.Div(id="filter_equivalence", style={'display': 'none'}),
 
         # Hidden div inside the app that stores the intermediate value
         html.Div(id='saved_data', style={'display': 'none'})
@@ -141,33 +147,28 @@ def update_output(contents):
 
 
     
-@app.callback(Output("graphs_container", "children"), [Input("saved_data", "children")])
+@app.callback([Output("graphs_container", "children")],
+[Input("saved_data", "children")])
 def add_preset(jsonified_data):
 
     graph_divs = []
-    '''
-    ind = 0
-    graph_divs.append(new_population_per_country(jsonified_data, "location", "date", "new_cases_per_million", ind))
-    ind = 1
-    graph_divs.append(new_population_per_country(jsonified_data, "location", "date", "new_deaths_per_million", ind))
-    '''
-
+ 
     axes = []
-    axes.append(Axis("x", True, 'data[data == "new_deaths_per_million"]'))
-    axes.append(Axis("y", True, 'data[data == "location"]'))
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, 'data["new_deaths_per_million"]'))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
     filters.append(Filter(default_value = ["Canada"], column_name = "location", multi = True))
 
-    gi1 = GraphInfo(dataset = jsonified_data, title = "Deaths per million", axes = axes, filters = filters)
-
-
-    graph_divs.append(new_custom_graph(gi1, 0))
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Deaths per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph(0))
     return graph_divs
     
 
-def new_custom_graph(graph_info, ind):
+def new_custom_graph(ind):
+    graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
 
     graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
@@ -180,12 +181,12 @@ def new_custom_graph(graph_info, ind):
         data = covid_data
 
         for defv in f.default_value:
-            data = covid_data[covid_data[f.column_name] == defv]
+            data = data[data[f.column_name] == defv]
 
         fig.add_trace(go.Scatter(x=eval(graph_info.axes[0].content), y=eval(graph_info.axes[1].content)))
         subindex += 1
 
-    graph = deg.ExtendableGraph(id={'type': 'GR', 'index': ind})
+    graph = dcc.Graph(id={'type': 'GR', 'index': ind})
     graph.className = "graph_div graph"
 
     resize_button = html.I("")
@@ -202,28 +203,39 @@ def new_custom_graph(graph_info, ind):
 
 
 
-@app.callback( 
-Output({'type': 'GR', 'index': MATCH}, 'extendData'), 
-    [Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'value'),
-    Input("saved_data", "children")],
-    [State({'type':'GR', 'index': MATCH}, 'figure')]) 
 
-def update_graph(filter_value, jsonified_data, figure):
+
+
+@app.callback( 
+Output({'type': 'GR', 'index': MATCH}, 'figure'), 
+    [Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'value'),
+    Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'id'),
+    Input("saved_data", "children")]
+    )
+    
+def update_graph(filter_value, filter_id, jsonified_data):
+    ind = filter_id[0]['index']
+
+    graph_info = graph_infos[ind]
     covid_data = pd.read_json(jsonified_data, orient="split")
 
-    fig = figure
-    print(figure)
+    fig = px.line(title = graph_info.title)
 
     if(covid_data is not None):
         for i in range(0, len(filter_value)):
             for j in range(0, len(filter_value[i])):
-                filtered_data = covid_data[covid_data["location"] == filter_value[i][j]]
-                fig.add_trace(go.Scatter(x=filtered_data["date"], y=filtered_data["new_" + "deaths" + "_per_million"], name=filter_value[i][j], showlegend=True))
-        
+                f = graph_info.filters[i]
+                data = covid_data[covid_data[f.column_name] == filter_value[i][j]]
+                fig.add_trace(go.Scatter(name=filter_value[i][j], x=eval(graph_info.axes[0].content), y=eval(graph_info.axes[1].content)))
+
         return fig
     else:
         raise dash.exceptions.PreventUpdate
 
+        
+
+
+    
 
 
 
