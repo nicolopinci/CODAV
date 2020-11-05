@@ -37,7 +37,7 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 
 class GraphInfo:
-    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland'):
+    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)'):
         self.title = title 
         self.axes = axes
         self.color = color
@@ -48,6 +48,7 @@ class GraphInfo:
         self.map_type = map_type
         self.location_mode = location_mode
         self.colorscale = colorscale
+        self.animation_frame = animation_frame
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
@@ -185,7 +186,7 @@ def add_preset(jsonified_data):
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New tests, confirmed cases and deaths per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_graph())
-    '''
+    
 
     # Graph 3: cumulative tests, confirmed cases, deaths per million people
     axes = []
@@ -199,17 +200,17 @@ def add_preset(jsonified_data):
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Cumulative tests, confirmed cases and deaths per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_graph())
-    
     '''
+    
     # 4: Map with deaths per million
     axes = []
     axes.append(Axis("x", True, 'data["location"]'))
     axes.append(Axis("y", True, ['data["total_deaths_per_million"]'], ["Total deaths per million"]))
 
     filters = []
-    filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
+    #filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total deaths per million", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total deaths per million", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
         
     graph_divs.append(new_custom_map())
 
@@ -225,7 +226,7 @@ def add_preset(jsonified_data):
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total cases per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_map())
-    '''
+    
 
 
     # Initialize preset container and return
@@ -237,9 +238,11 @@ def new_custom_map():
     ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
-    covid_data['date'] = pd.to_datetime(covid_data['date'], format='yyyy-mm-dd')
+    #covid_data['date'] = pd.to_datetime(covid_data['date'], format='yyyy-mm-dd')
 
     map_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
+
+    data = covid_data
 
     subindex = 0
     for f in graph_info.filters:
@@ -253,7 +256,7 @@ def new_custom_map():
         subindex += 1
 
 
-
+    '''
     data = dict(type = graph_info.map_type,
         locations = eval(graph_info.axes[0].content).values,
         locationmode = graph_info.location_mode,
@@ -264,7 +267,13 @@ def new_custom_map():
 
     
     fig = go.Figure(layout = {'title': graph_info.title}, data = [data])
+    '''
+
     
+    fig = px.choropleth(data, animation_frame = eval(graph_info.animation_frame), locations = eval(graph_info.axes[0].content).values, color = eval(graph_info.axes[1].content[0]).values, color_continuous_scale = graph_info.colorscale, locationmode = graph_info.location_mode)
+    
+    fig.update_layout(margin={"r":5,"t":60,"l":5,"b":5}, title = graph_info.title)
+
     graph = dcc.Graph(id={'type': 'MA', 'index': ind}, figure=fig)
     graph.className = "graph_div graph map"
 
@@ -332,12 +341,6 @@ def new_custom_graph():
 
 
 
-'''
-Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'value'),
-    Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'id'),
-
-# filter_value, filter_id,
-'''
 
 @app.callback( 
 Output({'type': 'GR', 'index': MATCH}, 'figure'), 
@@ -362,8 +365,6 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, jsonifi
         ind = date_id[0]['index']
         intind = date_id[0]['internal_index']
 
-
-    print(intind)
 
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(jsonified_data, orient="split")
