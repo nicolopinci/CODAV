@@ -59,10 +59,13 @@ class Axis:
         self.labels = labels
 
 class Filter:
-    def __init__(self, column_name = "", default_value = None, multi = True):
+    def __init__(self, column_name = "", default_value = [], multi = True, filter_type="Dropdown", start_date = "2020-01-01", end_date="2020-12-31"):
         self.column_name = column_name
         self.default_value = default_value
         self.multi = multi
+        self.filter_type = filter_type
+        self.start_date = start_date
+        self.end_date = end_date
 
 class Animation:
     def __init__(self, active = False, axis_number = None):
@@ -157,7 +160,7 @@ def add_preset(jsonified_data):
 
     graph_divs = []
  
-    
+    '''
     # Graph 1: new deaths per million people
     axes = []
     axes.append(Axis("x", True, 'data["date"]'))
@@ -182,7 +185,7 @@ def add_preset(jsonified_data):
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New tests, confirmed cases and deaths per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_graph())
-
+    '''
 
     # Graph 3: cumulative tests, confirmed cases, deaths per million people
     axes = []
@@ -190,12 +193,14 @@ def add_preset(jsonified_data):
     axes.append(Axis("y", True, ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
 
     filters = []
+    filters.append(Filter(filter_type="DatePickerRange", column_name = "date"))
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
 
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Cumulative tests, confirmed cases and deaths per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_graph())
-
+    
+    '''
     # 4: Map with deaths per million
     axes = []
     axes.append(Axis("x", True, 'data["location"]'))
@@ -215,12 +220,12 @@ def add_preset(jsonified_data):
     axes.append(Axis("y", True, ['data["total_cases_per_million"]'], ["Total cases per million"]))
 
     filters = []
-    filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
+    filters.append(Filter(filter_type="DatePickerRange", default_value = ["2020-10-19"], column_name = "date", multi = True))
 
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total cases per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_map())
-
+    '''
 
 
     # Initialize preset container and return
@@ -232,6 +237,8 @@ def new_custom_map():
     ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
+    covid_data['date'] = pd.to_datetime(covid_data['date'], format='yyyy-mm-dd')
+
     map_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
 
     subindex = 0
@@ -284,21 +291,29 @@ def new_custom_graph():
 
     subindex = 0
     for f in graph_info.filters:
-        dropdown_menu = dcc.Dropdown(id={'type': 'DD', 'index': ind, 'internal_index': subindex}, value=f.default_value, options = [{'label': i, 'value': i} for i in covid_data[f.column_name].unique()], multi=f.multi)
-        graph_div.children.append(dropdown_menu)
+
+        filter_menu = None
+        if(f.filter_type == "Dropdown"):
+            filter_menu = dcc.Dropdown(id={'type': 'DD', 'index': ind, 'internal_index': subindex}, value=f.default_value, options = [{'label': i, 'value': i} for i in covid_data[f.column_name].unique()], multi=f.multi)
+        elif(f.filter_type == "DatePickerRange"):
+            filter_menu = dcc.DatePickerRange(id={'type': 'DP', 'index': ind, 'internal_index': subindex})
+
+        graph_div.children.append(filter_menu)
         data = covid_data
 
-        for defv in f.default_value:
-            data = data[data[f.column_name] == defv]
+        if(f.filter_type == "Dropdown"):
+        
+            for defv in f.default_value:
+                data = data[data[f.column_name] == defv]
 
-        for lab in range(0, len(graph_info.axes[1].content)):
-            y_trace = graph_info.axes[1].content[lab]
-            label = graph_info.axes[1].labels[lab]
-            if(len(f.default_value) > 1):
-                label += ", " + defv
-            fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+            for lab in range(0, len(graph_info.axes[1].content)):
+                y_trace = graph_info.axes[1].content[lab]
+                label = graph_info.axes[1].labels[lab]
+                if(len(f.default_value) > 1):
+                    label += ", " + defv
+                fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
         subindex += 1
-
+        
     graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
 
@@ -317,38 +332,75 @@ def new_custom_graph():
 
 
 
+'''
+Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'value'),
+    Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'id'),
 
+# filter_value, filter_id,
+'''
 
 @app.callback( 
 Output({'type': 'GR', 'index': MATCH}, 'figure'), 
     [Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'value'),
     Input({'type':'DD', 'index': MATCH, 'internal_index': ALL}, 'id'),
+    
+    Input({'type':'DP', 'index': MATCH, 'internal_index': ALL}, 'start_date'),
+     Input({'type':'DP', 'index': MATCH, 'internal_index': ALL}, 'end_date'),
+
+    Input({'type':'DP', 'index': MATCH, 'internal_index': ALL}, 'id'),
     Input("saved_data", "children")]
     )
     
-def update_graph(filter_value, filter_id, jsonified_data):
-    ind = filter_id[0]['index']
+def update_graph(filter_value, filter_id, start_date, end_date, date_id, jsonified_data):
+    ind = None
+    type_filter = None
+
+    if(len(filter_id) > 0):
+        ind = filter_id[0]['index']
+        intind = filter_id[0]['internal_index']
+    else:
+        ind = date_id[0]['index']
+        intind = date_id[0]['internal_index']
+
+
+    print(intind)
 
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(jsonified_data, orient="split")
 
+    data = covid_data
+
     fig = px.line(title = graph_info.title)
 
-    if(covid_data is not None):
-        for i in range(0, len(filter_value)):
-            for j in range(0, len(filter_value[i])):
-                f = graph_info.filters[i]
-                data = covid_data[covid_data[f.column_name] == filter_value[i][j]]
-                
-                
-                for lab in range(0, len(graph_info.axes[1].content)):
+    dd_filters = [f for f in graph_info.filters if f.filter_type=="Dropdown"]
+    dp_filters = [f for f in graph_info.filters if f.filter_type=="DatePickerRange"]
 
-                    for y_trace in graph_info.axes[1].content:
-                        y_trace = graph_info.axes[1].content[lab]
-                        label = graph_info.axes[1].labels[lab]
-                        label += ", " + filter_value[i][j]
+
+    if(covid_data is not None):
+        for i in range(0, len(date_id)):
+            if(date_id[i]['type'] == "DP"):
+                f = dp_filters[i]
+                if(start_date[i] is not None and end_date[i] is not None):
+                    covid_data = covid_data[covid_data[f.column_name] <= end_date[i]]
+                    covid_data = covid_data[covid_data[f.column_name] >= start_date[i]]
+
+
+        for i in range(0, len(filter_id)):
+            if(filter_id[i]['type'] == "DD"):
+                for j in range(0, len(filter_value[i])): # For each choice in a single dropdown (e.g. list of countries)
+                    f = dd_filters[i]
+                    data = covid_data[covid_data[f.column_name] == filter_value[i][j]]
+                
+                    for lab in range(0, len(graph_info.axes[1].content)):
+
+                        for y_trace in graph_info.axes[1].content:
+                            y_trace = graph_info.axes[1].content[lab]
+                            label = graph_info.axes[1].labels[lab]
+                            label += ", " + filter_value[i][j]
                     
-                    fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                        fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+
+         
 
 
         return fig
