@@ -1,8 +1,8 @@
-document.addEventListener('mousedown', removeDrags);
-document.addEventListener('dragstart', removeDrags);
-document.addEventListener('drag', removeDrags);
-document.addEventListener('dragend', removeDrags);
-document.addEventListener('mousemove', addResizes);
+//document.addEventListener('mousedown', removeDrags);
+//document.addEventListener('dragstart', removeDrags);
+//document.addEventListener('drag', removeDrags);
+//document.addEventListener('dragend', removeDrags);
+//document.addEventListener('mousemove', addResizes);
 
 const minimum_size = 100;
 let original_width = 0;
