@@ -37,7 +37,7 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 
 class GraphInfo:
-    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)'):
+    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)', min_animation = 0, max_animation = 1):
         self.title = title 
         self.axes = axes
         self.color = color
@@ -49,6 +49,8 @@ class GraphInfo:
         self.location_mode = location_mode
         self.colorscale = colorscale
         self.animation_frame = animation_frame
+        self.min_animation = min_animation
+        self.max_animation = max_animation
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
@@ -86,6 +88,12 @@ def static_file(path):
 
 project_name = "CODAV"
 
+def mask_max(in_data, filter_key):
+    in_data[in_data[filter_key] != in_data[filter_key]] = in_data[filter_key].min()
+    in_data[in_data[filter_key] != in_data[filter_key]] = 0
+
+    out_data = in_data[in_data[filter_key] == in_data[filter_key].max()]
+    return out_data
 
 def generate_layout():
     return html.Div(
@@ -135,7 +143,6 @@ def parse_contents(contents):
 
 
     except Exception as e:
-        print(e)
         return html.Div([
             'There was an error processing this file.'
         ])
@@ -176,7 +183,47 @@ def add_preset(jsonified_data):
         
     graph_divs.append(new_custom_graph())
 
+    # Graph 1: new cases by population
+    axes = []
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, ['data["new_cases"]/data["population"]'], ["New cases by population"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New cases by population", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    # Graph 1: new increment with respect to previous (hospitalization)
+    axes = []
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, ['data["hosp_patients"].diff()/data["hosp_patients"].shift(periods = 1)'], ["New hospitalizations wrt the previous day"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New hospitalizations wrt the previous day", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
     
+    # Graph 1: new increment with respect to previous (ICUs)
+    axes = []
+    axes.append(Axis("x", True, 'data["date"]'))
+    axes.append(Axis("y", True, ['data["icu_patients"].diff()/data["icu_patients"].shift(periods = 1)'], ["New ICUs wrt the previous day"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "New ICUs wrt the previous day", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+
     # Graph 1: new deaths per million people
     axes = []
     axes.append(Axis("x", True, 'data["date"]'))
@@ -236,11 +283,59 @@ def add_preset(jsonified_data):
     axes.append(Axis("y", True, ['data["total_cases_per_million"]'], ["Total cases per million"]))
 
     filters = []
-    filters.append(Filter(filter_type="DatePickerRange", default_value = ["2020-10-19"], column_name = "date", multi = True))
 
     graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Total cases per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_map())
+
+
+
+    # 5: Deaths to cases ratio
+    axes = []
+    axes.append(Axis("x", True, 'data["location"]'))
+    axes.append(Axis("y", True, ['data["total_deaths"]/data["total_cases"]'], ["Deaths to cases ratio"]))
+
+    filters = []
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Deaths to cases ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
+        
+    graph_divs.append(new_custom_map())
+
+    # ICU to hospitalizations ratio
+    axes = []
+    axes.append(Axis("x", True, 'data["location"]'))
+    axes.append(Axis("y", True, ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
+
+    filters = []
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "ICU to hospitalization ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
+        
+    graph_divs.append(new_custom_map())
+
+
+    
+    # ICU to hospitalizations ratio
+    axes = []
+    axes.append(Axis("x", True, 'data["location"]'))
+    axes.append(Axis("y", True, ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
+
+    filters = []
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "ICU to hospitalization ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
+        
+    graph_divs.append(new_custom_map())
+
+
+
+    # Population density vs cases per million
+    axes = []
+    axes.append(Axis("x", True, '[mask_max(data, "total_cases_per_million")["population_density"]]'))
+    axes.append(Axis("y", True, ['[data["total_cases_per_million"].max()]'], ["Cases per million"]))
+
+    filters = []
+    filters.append(Filter(default_value = 'data["location"].unique()', column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data, title = "Population density vs cases per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
     
 
 
@@ -253,7 +348,8 @@ def new_custom_map():
     ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
-    #covid_data['date'] = pd.to_datetime(covid_data['date'], format='yyyy-mm-dd')
+    covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
+    covid_data.sort_values('date', ascending = True, inplace = True)
 
     #map_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
     map_div = html.Div(children = [])
@@ -271,22 +367,11 @@ def new_custom_map():
 
         subindex += 1
 
-
-    '''
-    data = dict(type = graph_info.map_type,
-        locations = eval(graph_info.axes[0].content).values,
-        locationmode = graph_info.location_mode,
-        colorscale = graph_info.colorscale,
-        text = eval(graph_info.axes[0].content).values,
-        z = eval(graph_info.axes[1].content[0]).values,
-        colorbar = {'title': graph_info.axes[1].labels[0]})
-
-    
-    fig = go.Figure(layout = {'title': graph_info.title}, data = [data])
-    '''
-
-    
-    fig = px.choropleth(data, animation_frame = eval(graph_info.animation_frame), locations = eval(graph_info.axes[0].content).values, color = eval(graph_info.axes[1].content[0]).values, color_continuous_scale = graph_info.colorscale, locationmode = graph_info.location_mode)
+    color_data = eval(graph_info.axes[1].content[0])
+    min_color = max(graph_info.min_animation, color_data.mean() - 2*color_data.std())
+    max_color = min(graph_info.max_animation, color_data.mean() + 2*color_data.std())
+   
+    fig = px.choropleth(data, range_color = [min_color, max_color], animation_frame = eval(graph_info.animation_frame), locations = eval(graph_info.axes[0].content).values, color = color_data.values, color_continuous_scale = graph_info.colorscale, locationmode = graph_info.location_mode)
     
     fig.update_layout(margin={"r":5,"t":60,"l":5,"b":5}, title = graph_info.title)
 
@@ -313,7 +398,8 @@ def new_custom_graph():
 
     #graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
     graph_div = html.Div(children = [])
-    fig = px.line(title = graph_info.title)
+    #fig = px.line(title = graph_info.title)
+    fig = go.Figure(layout = {'title': graph_info.title})
 
     subindex = 0
     for f in graph_info.filters:
@@ -334,16 +420,27 @@ def new_custom_graph():
 
         if(f.filter_type == "Dropdown"):
         
-            for defv in f.default_value:
-                data = data[data[f.column_name] == defv]
+            def_val_list = f.default_value
+
+            if(isinstance(f.default_value, str)):
+                def_val_list = eval(f.default_value)
+
+
+            for defv in def_val_list:
+                data = covid_data[covid_data[f.column_name] == defv]
 
             for lab in range(0, len(graph_info.axes[1].content)):
                 y_trace = graph_info.axes[1].content[lab]
                 label = graph_info.axes[1].labels[lab]
                 if(len(f.default_value) > 1):
                     label += ", " + defv
-                fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+
+          
+
+                fig.add_trace(go.Scatter(mode = 'markers', name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
         subindex += 1
+
+        covid_data = data
         
     graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
@@ -392,9 +489,12 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
     elif(len(date_id) > 0):
         ind = date_id[0]['index']
         intind = date_id[0]['internal_index']
-    else:
+    elif(len(date_id) > 0):
         ind = slider_id[0]['index']
         intind = slider_id[0]['internal_index']
+    else:
+        ind = None
+        intind = None
 
 
     graph_info = graph_infos[ind]
@@ -402,7 +502,9 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
     data = covid_data
 
-    fig = px.line(title = graph_info.title)
+    #fig = px.line(title = graph_info.title)
+    fig = go.Figure(layout = {'title': graph_info.title})
+
 
     dd_filters = [f for f in graph_info.filters if f.filter_type=="Dropdown"]
     dp_filters = [f for f in graph_info.filters if f.filter_type=="DatePickerRange"]
@@ -420,11 +522,9 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
         for i in range(0, len(slider_id)):
             if(slider_id[i]['type'] == "SR"):
                 f = sr_filters[i]
-                print(slider_value)
                 if(slider_value[i][0] is not None and slider_value[i][1] is not None):
                     covid_data = covid_data[covid_data[f.column_name] <= slider_value[i][1]]
                     covid_data = covid_data[covid_data[f.column_name] >= slider_value[i][0]]
-                    print(covid_data[covid_data["location"] == "Italy"])
 
         for i in range(0, len(filter_id)):
             if(filter_id[i]['type'] == "DD"):
@@ -439,7 +539,7 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
                             label = graph_info.axes[1].labels[lab]
                             label += ", " + filter_value[i][j]
                     
-                        fig.add_trace(go.Scatter(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                        fig.add_trace(go.Scatter(mode='markers', name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
 
          
 
