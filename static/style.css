@@ -56,7 +56,7 @@ body {
     color: white;
 }
 
-#upload-data, #add-graph {
+#upload-data, #add-graph, #upload-school {
     width: 40px;
     height: 40px;
     padding: 5px;
@@ -75,12 +75,17 @@ body {
     border-style: dashed;
 }
 
-#add-graph {
+#upload-school {
     right: 80px;
+    border-style: dashed;
+}
+
+#add-graph {
+    right: 140px;
 }
 
 
-#upload-data:hover, #add-graph:hover, .moveGraph:hover, .resizeGraph:hover {
+#upload-data:hover, #upload-school:hover, #add-graph:hover, .moveGraph:hover, .resizeGraph:hover {
     animation: invert-colors 500ms forwards;
 }
 
@@ -100,7 +105,19 @@ h1 span {
 
 #add_graph ~ div {
     position: absolute;
-    width: 100%;
-    height: 100%;
+    /*width: 100%;
+    height: 100%;*/
  
+}
+
+.filterDiv {
+    display: flex;
+}
+
+.filterDiv > div:nth-child(1) {
+    min-width: 100px;
+}
+
+.filterDiv > div:last-child {
+    min-width: 80%;
 }
