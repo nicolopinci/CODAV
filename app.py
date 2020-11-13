@@ -123,7 +123,7 @@ def generate_layout():
         dcc.Upload(
         id='upload-school',
         children=html.Div([
-              html.I("", className="fas fa-smile")
+              html.I("", className="fas fa-user-graduate")
         ]),
 
 
@@ -173,8 +173,15 @@ def parse_contents(covid, school):
     school['date'] = school['date'].dt.strftime("%Y-%m-%d")
     covid['date'] = covid['date'].dt.strftime("%Y-%m-%d")
 
+    school["Physical_education"] = pd.Series()
+    school.loc[school["Status"] == "Fully open", "Physical_education"] = 2 
+    school.loc[school["Status"] == "Partially open", "Physical_education"] = 1.5
+    school.loc[school["Status"] == "Closed due to COVID-19", "Physical_education"] = 1
+
+
     combined_datasets = pd.merge(covid, school, how = 'left', right_on = ['date', 'iso_code'], left_on = ['date', 'iso_code'])
- 
+    print(combined_datasets[combined_datasets["location"] == "Italy"])
+
     return combined_datasets.to_json(date_format='iso', orient='split')
 
 
@@ -210,13 +217,40 @@ def add_preset(jsonified_data):
 
     graph_divs = []
  
+
+    # School open vs stringency
+    axes = []
+    axes.append(Axis("Date", True, 'data["date"]'))
+    axes.append(Axis("Stringency to physical education availability ratio", True, ['data["stringency_index"]/data["Physical_education"]'], ["SPE"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    # School open vs stringency
+    axes = []
+    axes.append(Axis("Date", True, 'data["date"]'))
+    axes.append(Axis("Full openness", True, ['data["Physical_education"]'], ["Full openness"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+
     # Graph 3: cumulative tests, confirmed cases, deaths per million people
     axes = []
     axes.append(Axis("Date", True, 'data["date"]'))
     axes.append(Axis("Tests, cases and deaths per million", True, ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
 
     filters = []
-    #filters.append(Filter(filter_type="DatePickerRange", column_name = "date"))
     filters.append(Filter(filter_name = "Median age", filter_type="RangeSlider", column_name = "median_age"))
 
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
