@@ -13,6 +13,7 @@ from dash.dependencies import Input, Output, State, MATCH, ALL
 import dash_extendable_graph as deg
 import dash_core_components as dcc
 import dash_html_components as html
+import plotly
 import plotly.express as px
 import pandas as pd
 import dash_table
@@ -61,7 +62,7 @@ class GraphInfo:
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 class Axis:
-    def __init__(self, label = "", log_scale = False, content = [], labels = []):
+    def __init__(self, label = "", content = [], labels = [], log_scale = False):
         self.label = label
         self.log_scale = log_scale
         self.content = content
@@ -167,7 +168,7 @@ def parse_contents(covid, school):
     covid = pd.read_csv(io.StringIO(covid_decoded.decode('utf-8')))
 
 
-    school['date'] = pd.to_datetime(school['date'])
+    school['date'] = pd.to_datetime(school['date'], format = "%d/%m/%Y")
     covid['date'] = pd.to_datetime(covid['date'])
 
     school['date'] = school['date'].dt.strftime("%Y-%m-%d")
@@ -220,8 +221,8 @@ def add_preset(jsonified_data):
 
     # School open vs stringency
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Stringency to physical education availability ratio", True, ['data["stringency_index"]/data["Physical_education"]'], ["SPE"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Stringency to physical education availability ratio", ['data["stringency_index"]/data["Physical_education"]'], ["SPE"]))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
@@ -233,8 +234,8 @@ def add_preset(jsonified_data):
 
     # School open vs stringency
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Full openness", True, ['data["Physical_education"]'], ["Full openness"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
@@ -247,8 +248,8 @@ def add_preset(jsonified_data):
 
     # Graph 3: cumulative tests, confirmed cases, deaths per million people
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Tests, cases and deaths per million", True, ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Tests, cases and deaths per million", ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"], log_scale = True))
 
     filters = []
     filters.append(Filter(filter_name = "Median age", filter_type="RangeSlider", column_name = "median_age"))
@@ -261,8 +262,8 @@ def add_preset(jsonified_data):
 
     # Graph 1: new cases by population
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("New cases to population ratio", True, ['data["new_cases"]/data["population"]'], ["New cases by population"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("New cases to population ratio", ['data["new_cases"]/data["population"]'], ["New cases by population"]))
 
     filters = []
     filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
@@ -271,11 +272,25 @@ def add_preset(jsonified_data):
         
     graph_divs.append(new_custom_graph())
 
+    '''
+    # Graph 1: new cases to deaths
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("New deaths to cases ratio [%]", ['100*data["new_deaths"].shift(periods = -11)/data["new_cases"]'], ["New deaths to new cases ratio"], log_scale = True))
 
+    filters = []
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "New deaths to new cases ratio (11 days shifted)", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    
     # Graph 1: new increment with respect to previous (hospitalization)
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Hospitalized patients increment", True, ['data["hosp_patients"].diff()/data["hosp_patients"].shift(periods = 1)'], ["New hospitalizations wrt the previous day"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Hospitalized patients increment", ['data["hosp_patients"].diff()/data["hosp_patients"].shift(periods = 1)'], ["New hospitalizations wrt the previous day"]))
 
     filters = []
     filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
@@ -288,8 +303,8 @@ def add_preset(jsonified_data):
     
     # Graph 1: new increment with respect to previous (ICUs)
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("ICU patients increment", True, ['data["icu_patients"].diff()/data["icu_patients"].shift(periods = 1)'], ["New ICUs wrt the previous day"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("ICU patients increment", ['data["icu_patients"].diff()/data["icu_patients"].shift(periods = 1)'], ["New ICUs wrt the previous day"]))
 
     filters = []
     filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
@@ -302,8 +317,8 @@ def add_preset(jsonified_data):
 
     # Graph 1: new deaths per million people
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Deaths per million", True, ['data["new_deaths_per_million"]'], ["New deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Deaths per million", ['data["new_deaths_per_million"]'], ["New deaths"]))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
@@ -315,8 +330,8 @@ def add_preset(jsonified_data):
     
     # Graph 2: new tests, confirmed cases, deaths per million people
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("New tests, cases and deaths per million", True, ['data["new_tests_per_thousand"]*1000', 'data["new_cases_per_million"]', 'data["new_deaths_per_million"]'], ["New tests", "New cases", "New deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("New tests, cases and deaths per million", ['data["new_tests_per_thousand"]*1000', 'data["new_cases_per_million"]', 'data["new_deaths_per_million"]'], ["New tests", "New cases", "New deaths"]))
 
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
@@ -328,8 +343,8 @@ def add_preset(jsonified_data):
 
     # Graph 3: cumulative tests, confirmed cases, deaths per million people
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Total tests, cases and deaths per million", True, ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Total tests, cases and deaths per million", ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"]))
 
     filters = []
     filters.append(Filter(filter_type="DatePickerRange", column_name = "date"))
@@ -339,11 +354,11 @@ def add_preset(jsonified_data):
         
     graph_divs.append(new_custom_graph())
     
-    '''
+    
     # 4: Map with deaths per million
     axes = []
-    axes.append(Axis("x", True, 'data["location"]'))
-    axes.append(Axis("y", True, ['data["total_deaths_per_million"]'], ["Total deaths per million"]))
+    axes.append(Axis("x", 'data["location"]'))
+    axes.append(Axis("y", ['data["total_deaths_per_million"]'], ["Total deaths per million"]))
 
     filters = []
     #filters.append(Filter(default_value = ["2020-10-19"], column_name = "date", multi = True))
@@ -355,21 +370,21 @@ def add_preset(jsonified_data):
     
     # 5: Map with cases per million
     axes = []
-    axes.append(Axis("x", True, 'data["location"]'))
-    axes.append(Axis("y", True, ['data["total_cases_per_million"]'], ["Total cases per million"]))
+    axes.append(Axis("x", 'data["location"]'))
+    axes.append(Axis("y", ['data["total_cases_per_million"]'], ["Total cases per million"]))
 
     filters = []
 
     graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Total cases per million", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_map())
-    '''
+    
 
 
     # 5: Deaths to cases ratio
     axes = []
-    axes.append(Axis("x", True, 'data["location"]'))
-    axes.append(Axis("y", True, ['data["total_deaths"]/data["total_cases"]'], ["Deaths to cases ratio"]))
+    axes.append(Axis("x", 'data["location"]'))
+    axes.append(Axis("y", ['data["total_deaths"]/data["total_cases"]'], ["Deaths to cases ratio"]))
 
     filters = []
     graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Deaths to cases ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
@@ -379,8 +394,8 @@ def add_preset(jsonified_data):
 
     # ICU to hospitalizations ratio
     axes = []
-    axes.append(Axis("x", True, 'data["location"]'))
-    axes.append(Axis("y", True, ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
+    axes.append(Axis("x", 'data["location"]'))
+    axes.append(Axis("y", ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
 
     filters = []
     graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "ICU to hospitalization ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
@@ -388,23 +403,23 @@ def add_preset(jsonified_data):
     graph_divs.append(new_custom_map())
 
 
-    '''
+    
     # ICU to hospitalizations ratio
     axes = []
-    axes.append(Axis("x", True, 'data["location"]'))
-    axes.append(Axis("y", True, ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
+    axes.append(Axis("x", 'data["location"]'))
+    axes.append(Axis("y", ['data["icu_patients"]/data["hosp_patients"]'], ["Deaths to cases ratio"]))
 
     filters = []
     graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "ICU to hospitalization ratio", axes = axes, filters = filters, animation_frame = 'data["date"].astype(str)'))
         
     graph_divs.append(new_custom_map())
-    '''
+    
 
 
     # Population density vs cases per million
     axes = []
-    axes.append(Axis("Population density", True, 'mask_max(data, "total_cases_per_million")["population_density"]'))
-    axes.append(Axis("Cases per million", True, ['[data["total_cases_per_million"].max()]'], ["Cases per million"]))
+    axes.append(Axis("Population density", 'mask_max(data, "total_cases_per_million")["population_density"]'))
+    axes.append(Axis("Cases per million", ['[data["total_cases_per_million"].max()]'], ["Cases per million"]))
 
     filters = []
     filters.append(Filter(show_on_marker = True, default_value = ["Norway", "Italy", "Sweden"], column_name = "location", multi = True))
@@ -417,8 +432,8 @@ def add_preset(jsonified_data):
 
     # Stringency and cases per million
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Deaths and stringency", True, ['data["new_deaths_per_million"]', 'data["stringency_index"]'], ["Total deaths", "Stringency index"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Deaths and stringency", ['data["new_deaths_per_million"]', 'data["stringency_index"]'], ["Total deaths", "Stringency index"]))
 
     filters = []
 
@@ -433,8 +448,8 @@ def add_preset(jsonified_data):
     
     # Stringency / deaths (1 week shift)
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Stringency per new deaths per million", True, ['data["stringency_index"]/(1 + data["new_deaths_per_million"].shift(periods = 7))'], ["Stringency index per new deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Stringency per new deaths per million", ['data["stringency_index"]/(1 + data["new_deaths_per_million"].shift(periods = 7))'], ["Stringency index per new deaths"]))
 
     filters = []
     filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
@@ -446,8 +461,8 @@ def add_preset(jsonified_data):
 
     # Stringency / deaths (no shift)
     axes = []
-    axes.append(Axis("Date", True, 'data["date"]'))
-    axes.append(Axis("Stringency per new deaths per million", True, ['data["stringency_index"]/(1 + data["new_deaths_per_million"])'], ["Stringency index per new deaths"]))
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Stringency per new deaths per million", ['data["stringency_index"]/(1 + data["new_deaths_per_million"])'], ["Stringency index per new deaths"]))
 
     filters = []
     filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
@@ -458,7 +473,7 @@ def add_preset(jsonified_data):
 
 
 
-
+    '''
 
     # Initialize preset container and return
     preset_container = html.Div(children = graph_divs)
@@ -565,14 +580,23 @@ def new_custom_graph():
                     if(f.show_on_marker is True):
                         label = defv
                     else:
-                        label += ", " + defv
-
+                        if(len(graph_info.filters) > 1):
+                            label = filter_value[i][j] + " - " + label
+                        else:
+                            label = filter_value[i][j]
+                        
                 fig.add_trace(go.Scatter(mode = graph_info.plot_type, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
         subindex += 1
 
         covid_data = data
         
     fig.update_layout(height = graph_info.height, width = graph_info.width, showlegend=not graph_info.hide_side_legend, yaxis=dict(title=graph_info.axes[1].label), xaxis=dict(title=graph_info.axes[0].label))
+
+    if(graph_info.axes[0].log_scale is True):
+        fig.update_xaxes(type="log")
+
+    if(graph_info.axes[1].log_scale is True):
+        fig.update_yaxes(type="log")
 
     graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
@@ -669,16 +693,36 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
                         for y_trace in graph_info.axes[1].content:
                             y_trace = graph_info.axes[1].content[lab]
                             label = graph_info.axes[1].labels[lab]
-                            label += ", " + filter_value[i][j]
+                            if(len(filter_id[i]) > 1):
+                                label = filter_value[i][j] + " - " + label
+                            else:
+                                label = filter_value[i][j]
+
                             if(f.show_on_marker is True):
                                 label = filter_value[i][j]
                     
-                        fig.add_trace(go.Scatter(mode=graph_info.plot_type, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                        #red_component = 20 + 190*(ord(label[0].upper()) - 65)/25
+                        #green_component = (20 + 190*(ord(label[1].upper()) - 65)/25)
+                        #blue_component = (20 + 190*(ord(label[2].upper()) - 65)/25) + lab*30
+
+                        rgb_color = plotly.colors.DEFAULT_PLOTLY_COLORS[j%10].lstrip("rgb(").rstrip(")").split(", ")
+                        rgb_color = list(map(int, rgb_color))
+
+                        computed_color = "rgb(" + str(rgb_color[0]*(1+lab/4)) + ", " + str(rgb_color[1]*(1+lab/4)) + ", " + str(rgb_color[2]*(1+lab/4)) + ")"
+
+
+                        color_properties = graph_info.plot_type[:-1] + "=dict(color = '" + computed_color + "')"
+                        fig.add_trace(go.Scatter(line = dict(color = computed_color), mode=graph_info.plot_type, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
 
          
 
         fig.update_layout(showlegend=not graph_info.hide_side_legend)
+        if(graph_info.axes[0].log_scale is True):
+            fig.update_xaxes(type="log")
 
+        if(graph_info.axes[1].log_scale is True):
+            fig.update_yaxes(type="log")
+        
         return fig
     else:
         raise dash.exceptions.PreventUpdate
