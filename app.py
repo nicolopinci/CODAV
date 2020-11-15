@@ -26,6 +26,13 @@ import time
 import plotly.graph_objs as go
 from dash.exceptions import PreventUpdate
 
+# Import libraries for predictions
+import pmdarima as pm
+from statsmodels.tsa.seasonal import seasonal_decompose
+from sklearn.model_selection import TimeSeriesSplit
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from fbprophet import Prophet
+
 covid_data = None
 dimensions = []
 graph_infos = []
@@ -156,7 +163,6 @@ def generate_layout():
 
 app.layout = generate_layout
 
-
 def parse_contents(covid, school):
     covid_content_type, covid_content_string = covid.split(',')
     school_content_type, school_content_string = school.split(',')
@@ -185,11 +191,6 @@ def parse_contents(covid, school):
 
     return combined_datasets.to_json(date_format='iso', orient='split')
 
-
-
-
-
-
 @app.callback(Output('saved_data', 'children'),
               [Input('upload-data', 'contents'), Input('upload-school', 'contents')])
 def update_output(covid, school):
@@ -197,11 +198,6 @@ def update_output(covid, school):
         return parse_contents(covid, school)
     else:
         raise dash.exceptions.PreventUpdate
-
-
-
-
-
 
     
 @app.callback([Output("graphs_container", "children")],
@@ -213,12 +209,26 @@ def initialize_graphs(jsonified_data):
         raise dash.exceptions.PreventUpdate
 
 
-
 def add_preset(jsonified_data):
 
     graph_divs = []
  
+    # School open vs stringency
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
 
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+        
+    #graph_divs.append(new_custom_graph())
+
+    graph_divs.append(predict_world_cases("Prophet"))
+
+
+    '''
     # School open vs stringency
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -272,7 +282,7 @@ def add_preset(jsonified_data):
         
     graph_divs.append(new_custom_graph())
 
-    '''
+    
     # Graph 1: new cases to deaths
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -527,7 +537,6 @@ def new_custom_map():
 
     return map_div
 
-
 def new_custom_graph():
     ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
@@ -615,6 +624,75 @@ def new_custom_graph():
     return graph_div
 
 
+def predict_world_cases(prediction_method):
+
+    ind = len(graph_infos)-1
+    graph_info = graph_infos[ind]
+    covid_data = pd.read_json(graph_info.dataset, orient="split")
+
+
+    #graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
+    graph_div = html.Div(children = [])
+    #fig = px.line(title = graph_info.title)
+    fig = go.Figure(layout = {'title': "Prediction of the world cases in the next 6 months"})
+
+    dataset = covid_data.loc[covid_data['date'] >= pd.to_datetime(datetime.date(2020, 1, 22))]
+    dataset = dataset.loc[covid_data['location'] == "World"]
+
+    prediction_dataset = pd.DataFrame(columns = ['date', 'value'])
+    dates = list(dataset['date'])
+    prediction_dataset['date'] = dates
+    prediction_dataset['value'] = dataset["new_cases"].to_list()
+
+    prediction_dataset.set_index("date", inplace = True)
+
+
+    start_date = "2020-11-03"
+
+    train = prediction_dataset.loc[prediction_dataset.index < pd.to_datetime(start_date)]
+    test = prediction_dataset.loc[prediction_dataset.index >= pd.to_datetime(start_date)]
+
+    if(prediction_method == "SARIMAX"):
+        model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
+        print(model.summary())
+
+        model = SARIMAX(train, order=(8, 2, 1)) 
+    
+        # New cases per day
+        # World (7, 1, 8), Italy (1, 2, 0), Norway (2, 2, 3)
+
+        results = model.fit(disp = False)
+
+        sarimax_prediction = results.predict(start = start_date, end='2021-06-01', dynamic=False)
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=sarimax_prediction.index, y=sarimax_prediction))
+
+    elif(prediction_method == "Prophet"):
+        train["ds"] = train.index
+        train.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
+        m = Prophet()
+        # https://stackoverflow.com/questions/54544285/is-it-possible-to-do-multivariate-multi-step-forecasting-using-fb-prophet to add parameters
+        m.fit(train)
+        future = m.make_future_dataframe(periods = 180)
+        forecast = m.predict(future)
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat"]))
+
+    fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", x=dataset["date"], y=dataset["new_cases"]))
+
+    graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
+    graph.className = "graph_div graph"
+
+    resize_button = html.I("")
+    resize_button.className = "resizeGraph fas fa-expand-alt"
+
+    move_button = html.I("")
+    move_button.className = "moveGraph fas fa-arrows-alt"
+
+    #graph_div.children.append(move_button)
+    #graph_div.children.append(resize_button)
+    graph_div.children.append(graph)
+
+
+    return graph_div
 
 
 
