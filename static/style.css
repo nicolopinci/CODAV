@@ -3,6 +3,12 @@
     src: url(Elianto-Regular.ttf);
 }
 
+@font-face {
+    font-family: Retroica;
+    src: url(Retroica.ttf);
+}
+
+
 .moveGraph, .resizeGraph {
     position: absolute;
     padding: 5px;
@@ -138,15 +144,23 @@ body {
 #leftSide {
     width: 20%;
     min-height:400px;
-    background: red;
+    background: rgba(0, 0, 0, 0.9);
     float: left;
     margin-top: 70px;
+    color: white;
+}
+
+#rightSide * {
+    padding: 20px;
+}
+
+#rightSide > h1 {
+    font-family: Retroica;
 }
 
 #centralMap {
     width: 60%;
     min-height: 400px;
-    background: yellow;
     float: left;
     margin-top: 70px;
 
@@ -156,17 +170,38 @@ body {
 #rightSide {
     width: 20%;
     min-height: 400px;
-    background: blue;
     float: left;
     margin-top: 70px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
 }
 
 #graphs_container {
     width: 100vw;
     clear: both;
-    background-color: green;
+    padding-left: 30px;
+    padding-right: 30px;
 }
 
 #top_container {
     width: 100%;
+}
+
+.graph {
+    height: 500px;
+    width: 650px;
+    background-color: white;
+}
+
+#graphs_container > div > div {
+    padding: 20px;
+}
+
+#graphs_container div {
+    display: inline-block;
+    left: 0;
+}
+
+#graphs_container {
+    top: 500px;
 }

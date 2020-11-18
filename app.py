@@ -221,7 +221,7 @@ def update_output(covid, school):
     else:
         raise dash.exceptions.PreventUpdate
 
-    
+
 @app.callback([Output("graphs_container", "children")],
 [Input("saved_data", "children")])
 def initialize_graphs(jsonified_data):
@@ -245,7 +245,7 @@ def get_info(feature=None):
     if not feature:
         return header + ["Select a country to see more data"]
     return header + [html.B(feature["properties"]["ADMIN"]), html.Br(),
-                     feature["properties"]["total_cases"]]
+                     feature["properties"]["total_cases"], " total cases"]
 
 
 def add_central_map(covid_data):
@@ -267,7 +267,7 @@ def add_central_map(covid_data):
     style = dict(weight=2, opacity=1, color='white', dashArray='3', fillOpacity=0.7)
     # Create colorbar.
     ctg = ["{}+".format(cls, classes[i + 1]) for i, cls in enumerate(classes[:-1])] + ["{}+".format(classes[-1])]
-    colorbar = dlx.categorical_colorbar(categories=ctg, colorscale=colorscale, width=300, height=30, position="bottomleft")
+    colorbar = dlx.categorical_colorbar(categories=ctg, colorscale=colorscale, width=400, height=30, position="bottomleft")
 
     with urllib.request.urlopen('http://127.0.0.1:8050/static/countries.geojson') as f:
         data = json.load(f)
@@ -275,6 +275,7 @@ def add_central_map(covid_data):
 
     for feature in data["features"]:
         feature["properties"]["total_cases"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_cases"].max()
+        feature["properties"]["total_deaths"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_deaths"].max()
 
 
     geojson = dl.GeoJSON(data=data,  # url to geojson file
@@ -292,7 +293,7 @@ def add_central_map(covid_data):
                     style={"position": "absolute", "top": "10px", "right": "10px", "z-index": "1000"})
 
     map_div = html.Div([dl.Map(children=[dl.TileLayer(), geojson, colorbar, info])],
-                      style={'width': '100%', 'height': '50vh', 'margin': "auto", "display": "block"}, id="map")
+                      style={'width': '100%', 'height': '400px', 'margin': "auto", "display": "block"}, id="map")
 
 
     return [map_div]
@@ -302,12 +303,21 @@ def add_central_map(covid_data):
 def info_hover(feature):
     return get_info(feature)
 
+@app.callback(Output("rightSide", "children"), [Input("geojson", "click_feature")])
+def country_click(feature):
+    if feature is not None:
+        header = [html.H1(feature["properties"]["ADMIN"])]
+        return header + ["Total cases: ", html.B(feature["properties"]["total_cases"]), 
+                        html.Br(),
+                        "Total deaths: ", feature["properties"]["total_deaths"]]
+ 
 
 def add_preset(jsonified_data):
 
+    print("ADD PRESET")
     graph_divs = []
-    '''
-    # School open vs stringency
+    
+    # SARIMAX
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
     axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
@@ -315,14 +325,29 @@ def add_preset(jsonified_data):
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "SARIMAX", axes = axes, filters = filters))
         
     #graph_divs.append(new_custom_graph())
 
-    graph_divs.append(predict_world_cases("Linear"))
+    graph_divs.append(predict_world_cases("SARIMAX"))
 
 
-    
+    # Prophet
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
+        
+    #graph_divs.append(new_custom_graph())
+
+    graph_divs.append(predict_world_cases("Prophet"))
+
+
+    '''
     # School open vs stringency
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -720,6 +745,7 @@ def new_custom_graph():
 
 def predict_world_cases(prediction_method):
 
+    print(prediction_method)
     ind = len(graph_infos)-1
     graph_info = graph_infos[ind]
     covid_data = pd.read_json(graph_info.dataset, orient="split")
@@ -763,6 +789,9 @@ def predict_world_cases(prediction_method):
     test.fillna(0, inplace = True)
 
     if(prediction_method == "SARIMAX"):
+
+        train.drop(columns = ["stringency"], inplace = True)
+        test.drop(columns = ["stringency"], inplace = True)
         model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
         print(model.summary())
 
