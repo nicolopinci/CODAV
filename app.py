@@ -22,6 +22,13 @@ import dash_draggable
 import json
 import pickle
 import time
+import numpy as np
+import os
+from math import log10, floor
+
+
+import sklearn as sk
+from sklearn.linear_model import LinearRegression
 
 import plotly.graph_objs as go
 from dash.exceptions import PreventUpdate
@@ -33,9 +40,17 @@ from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from fbprophet import Prophet
 
+# Central map
+import dash_leaflet as dl
+import dash_leaflet.express as dlx
+
 covid_data = None
 dimensions = []
 graph_infos = []
+
+import urllib.request
+
+
 
 
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
@@ -117,6 +132,7 @@ def generate_layout():
     id="top_container",
     children=[
 
+        html.Div(id = "top_bar", children = [
 	    dcc.Upload(
         id='upload-data',
         children=html.Div([
@@ -143,13 +159,19 @@ def generate_layout():
 
         html.Div(id='output-data-upload'),
         html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)]),
-        
+       
         html.A(
             id='add-graph',
             children=html.Div([
                 html.I("", className="fas fa-plus")
             ])
         ),
+        ]),
+
+        html.Div(id = "leftSide", children = []),
+        html.Div(id = "centralMap", children = []),
+        html.Div(id = "rightSide", children = []),
+
 
         html.Div(id="graphs_container", children=[]),
         html.Div(id="filter_equivalence", style={'display': 'none'}),
@@ -209,10 +231,82 @@ def initialize_graphs(jsonified_data):
         raise dash.exceptions.PreventUpdate
 
 
+@app.callback([Output("centralMap", "children")],
+[Input("saved_data", "children")])
+def initialize_graphs(jsonified_data):
+    if(jsonified_data is not None):
+        return add_central_map(jsonified_data)
+    else:
+        raise dash.exceptions.PreventUpdate
+
+
+def get_info(feature=None):
+    header = [html.H4("Worldwide COVID map")]
+    if not feature:
+        return header + ["Select a country to see more data"]
+    return header + [html.B(feature["properties"]["ADMIN"]), html.Br(),
+                     feature["properties"]["total_cases"]]
+
+
+def add_central_map(covid_data):
+
+    covid_data = pd.read_json(covid_data, orient="split")
+
+    covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
+    covid_data.sort_values('date', ascending = True, inplace = True)
+
+
+    graph_divs = []
+
+    max_cases = covid_data[covid_data["location"] != "World"]["total_cases"].max()
+    optimal_step = max_cases/5
+
+    classes = np.arange(start = 0, stop = max_cases, step = round(optimal_step, -int(floor(log10(abs(optimal_step))))))
+    
+    colorscale = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026']
+    style = dict(weight=2, opacity=1, color='white', dashArray='3', fillOpacity=0.7)
+    # Create colorbar.
+    ctg = ["{}+".format(cls, classes[i + 1]) for i, cls in enumerate(classes[:-1])] + ["{}+".format(classes[-1])]
+    colorbar = dlx.categorical_colorbar(categories=ctg, colorscale=colorscale, width=300, height=30, position="bottomleft")
+
+    with urllib.request.urlopen('http://127.0.0.1:8050/static/countries.geojson') as f:
+        data = json.load(f)
+
+
+    for feature in data["features"]:
+        feature["properties"]["total_cases"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_cases"].max()
+
+
+    geojson = dl.GeoJSON(data=data,  # url to geojson file
+                        options=dict(style=dlx.choropleth.style),  # how to style each polygon
+                        zoomToBounds=True,  # when true, zooms to bounds when data changes (e.g. on load)
+                        zoomToBoundsOnClick=True,  # when true, zooms to bounds of feature (e.g. polygon) on click
+                        hoverStyle=dict(weight=5, color='#666', dashArray=''),  # special style applied on hover
+                        hideout=dict(colorscale=colorscale, classes=classes, style=style, color_prop="total_cases"),
+                        id="geojson")
+
+    # https://dash-leaflet.herokuapp.com/#geojson
+    
+    # Create info control.
+    info = html.Div(children=get_info(), id="info", className="info",
+                    style={"position": "absolute", "top": "10px", "right": "10px", "z-index": "1000"})
+
+    map_div = html.Div([dl.Map(children=[dl.TileLayer(), geojson, colorbar, info])],
+                      style={'width': '100%', 'height': '50vh', 'margin': "auto", "display": "block"}, id="map")
+
+
+    return [map_div]
+
+
+@app.callback(Output("info", "children"), [Input("geojson", "hover_feature")])
+def info_hover(feature):
+    return get_info(feature)
+
+
 def add_preset(jsonified_data):
 
     graph_divs = []
- 
+    '''
     # School open vs stringency
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -225,10 +319,10 @@ def add_preset(jsonified_data):
         
     #graph_divs.append(new_custom_graph())
 
-    graph_divs.append(predict_world_cases("Prophet"))
+    graph_divs.append(predict_world_cases("Linear"))
 
 
-    '''
+    
     # School open vs stringency
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -637,20 +731,36 @@ def predict_world_cases(prediction_method):
     fig = go.Figure(layout = {'title': "Prediction of the world cases in the next 6 months"})
 
     dataset = covid_data.loc[covid_data['date'] >= pd.to_datetime(datetime.date(2020, 1, 22))]
-    dataset = dataset.loc[covid_data['location'] == "World"]
+    dataset = dataset.loc[covid_data['location'] == "Italy"]
 
+    dataset[["new_cases", "stringency_index"]].fillna(0, inplace = True)
+    dataset["total_cases"].fillna(method = 'bfill', inplace = True)
+
+
+    # Only dates and values (simple case but no good results)
     prediction_dataset = pd.DataFrame(columns = ['date', 'value'])
     dates = list(dataset['date'])
     prediction_dataset['date'] = dates
     prediction_dataset['value'] = dataset["new_cases"].to_list()
-
     prediction_dataset.set_index("date", inplace = True)
+
+    # Multiple attributes
+    pred_multi_dataset = pd.DataFrame(columns = ['date', 'value', 'stringency'])
+    dates = list(dataset['date'])
+    pred_multi_dataset['date'] = dates
+    pred_multi_dataset['value'] = dataset["new_cases"].to_list()
+    pred_multi_dataset['stringency'] = dataset["stringency_index"].to_list()
+    pred_multi_dataset.set_index("date", inplace = True)
+
 
 
     start_date = "2020-11-03"
 
-    train = prediction_dataset.loc[prediction_dataset.index < pd.to_datetime(start_date)]
-    test = prediction_dataset.loc[prediction_dataset.index >= pd.to_datetime(start_date)]
+    train = pred_multi_dataset.loc[pred_multi_dataset.index < pd.to_datetime(start_date)]
+    test = pred_multi_dataset.loc[pred_multi_dataset.index >= pd.to_datetime(start_date)]
+
+    train.fillna(0, inplace = True)
+    test.fillna(0, inplace = True)
 
     if(prediction_method == "SARIMAX"):
         model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
@@ -669,12 +779,39 @@ def predict_world_cases(prediction_method):
     elif(prediction_method == "Prophet"):
         train["ds"] = train.index
         train.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
+        test.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
+
+        print(train.columns)
         m = Prophet()
         # https://stackoverflow.com/questions/54544285/is-it-possible-to-do-multivariate-multi-step-forecasting-using-fb-prophet to add parameters
+
         m.fit(train)
-        future = m.make_future_dataframe(periods = 180)
+        future = m.make_future_dataframe(periods = len(test) - 1)
         forecast = m.predict(future)
         fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat"]))
+
+    elif(prediction_method == "Linear"):
+        # Look at the past and predict + LSTM
+        train_data_all = dataset.loc[dataset["date"] < pd.to_datetime(start_date)]
+        test_data_all = dataset.loc[dataset["date"] >= pd.to_datetime(start_date)]
+        
+        model = sk.linear_model.LinearRegression()
+
+        y = train_data_all["new_cases"].values.reshape(len(train_data_all), 1)
+        x = train_data_all[["stringency_index", "total_cases"]].values.reshape(len(train_data_all), 2)
+
+        model.fit(x, y)
+
+        intercept = model.intercept_
+        coeff = model.coef_
+
+        rss = multivarRSS(test_data_all["new_cases"], test_data_all[["stringency_index", "total_cases"]], intercept, coeff)
+        test_data_all["predicted"] = intercept[0] + test_data_all["total_cases"]*coeff[0][1] + test_data_all["stringency_index"]*coeff[0][0]
+
+        print(test_data_all)
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=test_data_all["date"], y=test_data_all["predicted"]))
+
+
 
     fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", x=dataset["date"], y=dataset["new_cases"]))
 
@@ -694,6 +831,19 @@ def predict_world_cases(prediction_method):
 
     return graph_div
 
+def rss(y, y_hat):
+    return np.square(y - y_hat).sum()
+    # Note: the time used by this combination of functions is the same as np.power(y-y_hat, 2).sum() and np.sum(np.square(y-y_hat)), which in my case ranges between 1 and 2 ms
+    pass 
+
+def multivarRSS(y, x, w0, w1):
+    observed = y
+    
+    predicted = x.dot(w1[0]) + w0[0]
+ 
+    multivarRSS = rss(observed, predicted)
+
+    return multivarRSS
 
 
 @app.callback( 

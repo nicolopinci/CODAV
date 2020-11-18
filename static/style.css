@@ -121,3 +121,52 @@ h1 span {
 .filterDiv > div:last-child {
     min-width: 80%;
 }
+
+body {
+    margin: 0px;
+}
+
+#top_bar {
+    background-color: rgba(0, 0, 0, 0.5);
+    height: 70px;
+    position: fixed;
+    width: 100%;
+    padding: 0;
+    padding-left: 30px;
+}
+
+#leftSide {
+    width: 20%;
+    min-height:400px;
+    background: red;
+    float: left;
+    margin-top: 70px;
+}
+
+#centralMap {
+    width: 60%;
+    min-height: 400px;
+    background: yellow;
+    float: left;
+    margin-top: 70px;
+
+}
+
+
+#rightSide {
+    width: 20%;
+    min-height: 400px;
+    background: blue;
+    float: left;
+    margin-top: 70px;
+}
+
+#graphs_container {
+    width: 100vw;
+    clear: both;
+    background-color: green;
+}
+
+#top_container {
+    width: 100%;
+}
