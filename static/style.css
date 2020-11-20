@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Armata&display=swap');
+
 @font-face {
     font-family: Elianto;
     src: url(Elianto-Regular.ttf);
@@ -8,6 +10,9 @@
     src: url(Retroica.ttf);
 }
 
+body {
+    font-family: 'Armata', sans-serif;
+}
 
 .moveGraph, .resizeGraph {
     position: absolute;
@@ -143,7 +148,7 @@ body {
 
 #leftSide {
     width: 20%;
-    min-height:400px;
+    height: 500px;
     background: rgba(0, 0, 0, 0.9);
     float: left;
     margin-top: 70px;
@@ -156,11 +161,12 @@ body {
 
 #rightSide > h1 {
     font-family: Retroica;
+    display: inline-block;
 }
 
 #centralMap {
     width: 60%;
-    min-height: 400px;
+    height: 500px;
     float: left;
     margin-top: 70px;
 
@@ -169,14 +175,15 @@ body {
 
 #rightSide {
     width: 20%;
-    min-height: 400px;
+    height: 500px;
     float: left;
     margin-top: 70px;
     background: rgba(0, 0, 0, 0.9);
     color: white;
+    text-align: center;
 }
 
-#graphs_container {
+.graphs_container {
     width: 100vw;
     clear: both;
     padding-left: 30px;
@@ -193,15 +200,86 @@ body {
     background-color: white;
 }
 
-#graphs_container > div > div {
+.graphs_container > div > div {
     padding: 20px;
-}
-
-#graphs_container div {
     display: inline-block;
     left: 0;
 }
 
-#graphs_container {
+.graphs_container > div {
+    display: inline-block;
+    left: 0;
+}
+
+.graphs_container {
     top: 500px;
 }
+
+#edu_container {
+    display: none;
+}
+
+#predictions_container {
+    display: none;
+}
+
+#analyses_container {
+    display: block;
+}
+
+#three_buttons {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    clear: both;
+    display: flex;
+    justify-content: center;
+}
+
+#three_buttons > li {
+    float: left;
+    display: block;
+    text-align: center;
+    padding: 6px;
+    text-decoration: none;
+    border: 3px solid black;
+    margin-left: 5px;
+    margin-top: 50px;
+    margin-bottom: 50px;
+}
+
+#three_buttons > li:hover, #three_buttons > .currentlySelected {
+    background-color: dodgerblue;
+    color: white;
+    border-color: darkblue;
+    cursor: pointer;
+}
+
+#three_buttons > .currentlySelected {
+    background-color: deepskyblue;
+}
+
+.filterDiv {
+    display: flex !important;
+}
+
+#rightSide img {
+    padding: 0px;
+    max-width: 90%;
+    max-height: 250px;
+}
+
+a:hover {
+    font-weight: 900;
+    color: deepskyblue;
+}
+
+a {
+    text-decoration: none;
+    color: powderblue;
+}
+
+#map {
+    height: 100% !important;
+}
+

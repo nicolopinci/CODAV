@@ -24,7 +24,7 @@ import pickle
 import time
 import numpy as np
 import os
-from math import log10, floor
+from math import log10, floor, ceil
 
 
 import sklearn as sk
@@ -54,7 +54,7 @@ import urllib.request
 
 
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
-external_scripts = ["static/moveGraphs.js"]
+external_scripts = ["static/moveGraphs.js", "static/handleMenu.js"]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
 
@@ -172,8 +172,11 @@ def generate_layout():
         html.Div(id = "centralMap", children = []),
         html.Div(id = "rightSide", children = []),
 
+        html.Ul(id = "three_buttons", children = [html.Li(id = "general_button", className="currentlySelected", children = ["General analyses"]), html.Li(id = "edu_button", children = ["Education"]), html.Li(id = "pred_button", children = ["Predictions"])]),
+        html.Div(id="predictions_container", className = "graphs_container", children=[]),
+        html.Div(id="edu_container", className = "graphs_container", children=[]),
+        html.Div(id="analyses_container", className = "graphs_container", children=[]),
 
-        html.Div(id="graphs_container", children=[]),
         html.Div(id="filter_equivalence", style={'display': 'none'}),
 
         # Hidden div inside the app that stores the intermediate value
@@ -222,11 +225,29 @@ def update_output(covid, school):
         raise dash.exceptions.PreventUpdate
 
 
-@app.callback([Output("graphs_container", "children")],
+@app.callback([Output("predictions_container", "children")],
 [Input("saved_data", "children")])
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
-        return add_preset(jsonified_data)
+        return add_predictions(jsonified_data)
+    else:
+        raise dash.exceptions.PreventUpdate
+
+
+@app.callback([Output("edu_container", "children")],
+[Input("saved_data", "children")])
+def initialize_graphs(jsonified_data):
+    if(jsonified_data is not None):
+        return add_education(jsonified_data)
+    else:
+        raise dash.exceptions.PreventUpdate
+
+
+@app.callback([Output("analyses_container", "children")],
+[Input("saved_data", "children")])
+def initialize_graphs(jsonified_data):
+    if(jsonified_data is not None):
+        return add_analyses(jsonified_data)
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -235,20 +256,40 @@ def initialize_graphs(jsonified_data):
 [Input("saved_data", "children")])
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
-        return add_central_map(jsonified_data)
+        return add_central_map(jsonified_data, "total_cases_per_million")
     else:
         raise dash.exceptions.PreventUpdate
 
 
+@app.callback([Output("leftSide", "children")],
+[Input("saved_data", "children")])
+def initialize_graphs(jsonified_data):
+    if(jsonified_data is not None):
+        return add_ranking(jsonified_data, "total_cases_per_million", 10)
+    else:
+        raise dash.exceptions.PreventUpdate
+
+
+
 def get_info(feature=None):
-    header = [html.H4("Worldwide COVID map")]
+    header = [html.H4("COVID cases per million")]
     if not feature:
         return header + ["Select a country to see more data"]
+
+    quantity =  feature["properties"]["total_cases_per_million"]
+
+    info = ""
+
+    if(quantity is None):
+        info = "Data not available"
+    else:
+        info = str(quantity) + " total cases per million"
+
     return header + [html.B(feature["properties"]["ADMIN"]), html.Br(),
-                     feature["properties"]["total_cases"], " total cases"]
+                   info]
 
 
-def add_central_map(covid_data):
+def add_central_map(covid_data, color_col):
 
     covid_data = pd.read_json(covid_data, orient="split")
 
@@ -258,8 +299,10 @@ def add_central_map(covid_data):
 
     graph_divs = []
 
-    max_cases = covid_data[covid_data["location"] != "World"]["total_cases"].max()
+    max_cases = covid_data[covid_data["location"] != "World"][color_col].max()
     optimal_step = max_cases/5
+
+    print(max_cases)
 
     classes = np.arange(start = 0, stop = max_cases, step = round(optimal_step, -int(floor(log10(abs(optimal_step))))))
     
@@ -274,7 +317,7 @@ def add_central_map(covid_data):
 
 
     for feature in data["features"]:
-        feature["properties"]["total_cases"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_cases"].max()
+        feature["properties"][color_col] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]][color_col].max()
         feature["properties"]["total_deaths"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_deaths"].max()
 
 
@@ -283,7 +326,7 @@ def add_central_map(covid_data):
                         zoomToBounds=True,  # when true, zooms to bounds when data changes (e.g. on load)
                         zoomToBoundsOnClick=True,  # when true, zooms to bounds of feature (e.g. polygon) on click
                         hoverStyle=dict(weight=5, color='#666', dashArray=''),  # special style applied on hover
-                        hideout=dict(colorscale=colorscale, classes=classes, style=style, color_prop="total_cases"),
+                        hideout=dict(colorscale=colorscale, classes=classes, style=style, color_prop=color_col),
                         id="geojson")
 
     # https://dash-leaflet.herokuapp.com/#geojson
@@ -299,6 +342,36 @@ def add_central_map(covid_data):
     return [map_div]
 
 
+def add_ranking(covid_data, ranking_col, k):
+
+    covid_data = pd.read_json(covid_data, orient="split")
+
+    covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
+    covid_data.sort_values('date', ascending = True, inplace = True)
+
+    covid_last = covid_data[covid_data["date"] == covid_data["date"].max()]
+    covid_last.sort_values(ranking_col, ascending = False, inplace = True)
+
+    y =  covid_last["location"].head(k)
+
+    fig = go.Figure(go.Bar(
+            x = covid_last[ranking_col].head(k),
+            y = y,
+            text =  y,
+            textposition = "inside",
+            orientation='h'),
+            layout={
+                'margin': {'l': 0, 'r': 0, 't': 50, 'b': 0},
+            }
+    )
+
+    fig.update_layout(title = "Top " + str(k) + " countries oer total cases per million", yaxis = dict(categoryorder = 'total ascending'))
+    fig.update_layout(yaxis_visible=False, yaxis_showticklabels=False)
+
+    return [dcc.Graph(figure = fig, id = "left_ranking")]
+
+
+
 @app.callback(Output("info", "children"), [Input("geojson", "hover_feature")])
 def info_hover(feature):
     return get_info(feature)
@@ -307,14 +380,11 @@ def info_hover(feature):
 def country_click(feature):
     if feature is not None:
         header = [html.H1(feature["properties"]["ADMIN"])]
-        return header + ["Total cases: ", html.B(feature["properties"]["total_cases"]), 
-                        html.Br(),
-                        "Total deaths: ", feature["properties"]["total_deaths"]]
+        return header + [html.A([html.Img(src = app.get_asset_url("who.png")), html.Br(), html.P("Information from WHO")], target = "_blank", href = "https://www.who.int/countries/" + feature["properties"]["ISO_A3"])]
  
 
-def add_preset(jsonified_data):
+def add_predictions(jsonified_data):
 
-    print("ADD PRESET")
     graph_divs = []
     
     # SARIMAX
@@ -608,6 +678,62 @@ def add_preset(jsonified_data):
     preset_container = html.Div(children = graph_divs)
     return [preset_container]
     
+def add_analyses(jsonified_data):
+    graph_divs = []
+    # Graph 1: new increment with respect to previous (hospitalization)
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Hospitalized patients increment", ['data["hosp_patients"].diff()/data["hosp_patients"].shift(periods = 1)'], ["New hospitalizations wrt the previous day"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "New hospitalizations wrt the previous day", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    # Graph 3: cumulative tests, confirmed cases, deaths per million people
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Tests, cases and deaths per million", ['data["total_tests_per_thousand"]*1000', 'data["total_cases_per_million"]', 'data["total_deaths_per_million"]'], ["Total tests", "Total cases", "Total deaths"], log_scale = True))
+
+    filters = []
+    filters.append(Filter(filter_name = "Median age", filter_type="RangeSlider", column_name = "median_age"))
+
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Cumulative tests, confirmed cases and deaths per million", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+    # Initialize preset container and return
+    preset_container = html.Div(children = graph_divs)
+    return [preset_container]
+
+
+
+def add_education(jsonified_data):
+    graph_divs = []
+
+    # School open vs stringency
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Stringency to physical education availability ratio", ['data["stringency_index"]/data["Physical_education"]'], ["SPE"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+    # Initialize preset container and return
+    preset_container = html.Div(children = graph_divs)
+    return [preset_container]
+
+
 
 def new_custom_map():
     ind = len(graph_infos)-1
@@ -678,7 +804,7 @@ def new_custom_graph():
         elif(f.filter_type == "DatePickerRange"):
             filter_menu = dcc.DatePickerRange(id={'type': 'DP', 'index': ind, 'internal_index': subindex})
         elif(f.filter_type == "RangeSlider"):
-            filter_menu = dcc.RangeSlider(tooltip = {'always_visible': True, 'placement': 'bottom'}, dots = True, id =  {'type': 'SR', 'index': ind, 'internal_index': subindex}, min=data[f.column_name].min()*0.9, max=data[f.column_name].max()*1.1, step=(data[f.column_name].diff().max() - data[f.column_name].diff().min())/1000.0, value=[data[f.column_name].min(), data[f.column_name].max()])
+            filter_menu = dcc.RangeSlider(tooltip = {'always_visible': True, 'placement': 'bottom'}, dots = True, id =  {'type': 'SR', 'index': ind, 'internal_index': subindex}, min=floor(data[f.column_name].min()*0.9), max=ceil(data[f.column_name].max()*1.1), step=1, value=[floor(data[f.column_name].min()), ceil(data[f.column_name].max())])
         
         filter_name = f.filter_name
 
@@ -792,10 +918,10 @@ def predict_world_cases(prediction_method):
 
         train.drop(columns = ["stringency"], inplace = True)
         test.drop(columns = ["stringency"], inplace = True)
-        model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
-        print(model.summary())
+        #model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
+        #print(model.summary())
 
-        model = SARIMAX(train, order=(8, 2, 1)) 
+        model = SARIMAX(train, order=(2, 2, 10)) 
     
         # New cases per day
         # World (7, 1, 8), Italy (1, 2, 0), Norway (2, 2, 3)
