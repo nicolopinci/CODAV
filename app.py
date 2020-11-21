@@ -24,7 +24,9 @@ import pickle
 import time
 import numpy as np
 import os
-from math import log10, floor, ceil
+from math import log10, floor, ceil, sqrt
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
+from statsmodels.tsa.vector_ar.var_model import VAR
 
 
 import sklearn as sk
@@ -415,6 +417,23 @@ def add_predictions(jsonified_data):
     #graph_divs.append(new_custom_graph())
 
     graph_divs.append(predict_world_cases("Prophet"))
+
+
+
+    # VAR
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
+        
+    #graph_divs.append(new_custom_graph())
+
+    graph_divs.append(predict_world_cases("VAR"))
+
 
 
     '''
@@ -906,7 +925,7 @@ def predict_world_cases(prediction_method):
 
 
 
-    start_date = "2020-11-03"
+    start_date = "2020-11-14"
 
     train = pred_multi_dataset.loc[pred_multi_dataset.index < pd.to_datetime(start_date)]
     test = pred_multi_dataset.loc[pred_multi_dataset.index >= pd.to_datetime(start_date)]
@@ -936,37 +955,54 @@ def predict_world_cases(prediction_method):
         train.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
         test.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
 
-        print(train.columns)
         m = Prophet()
         # https://stackoverflow.com/questions/54544285/is-it-possible-to-do-multivariate-multi-step-forecasting-using-fb-prophet to add parameters
 
         m.fit(train)
-        future = m.make_future_dataframe(periods = len(test) - 1)
+        #future = m.make_future_dataframe(periods = len(test) - 1)
+        
+        future = m.make_future_dataframe(periods = 180)
+
         forecast = m.predict(future)
         fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat"]))
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat_lower"]))
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat_upper"]))
 
-    elif(prediction_method == "Linear"):
-        # Look at the past and predict + LSTM
-        train_data_all = dataset.loc[dataset["date"] < pd.to_datetime(start_date)]
-        test_data_all = dataset.loc[dataset["date"] >= pd.to_datetime(start_date)]
+    elif(prediction_method == "VAR"):
+
+        var_data = covid_data[covid_data["location"] == "Italy"]
+        var_data.set_index("date", inplace = True)
+        var_data.index = var_data.index.to_period("D")
+        var_data = var_data.sort_index()
+        var_data = var_data.loc[:, (var_data != var_data.iloc[0]).any()] # Delete constant value
+
+        var_data.drop(["tests_units", "Country", "Status", "Note"], axis = 1, inplace = True)
+
+        var_data.fillna(0, inplace = True)
+       
+        cols = var_data.columns
+        print("VAR DATA")
+        print(var_data)
+
+        train = var_data[:int(0.9*len(var_data))]
+        valid = var_data[int(0.9*len(var_data)):]
         
-        model = sk.linear_model.LinearRegression()
+        print(train)
+        print(valid)
 
-        y = train_data_all["new_cases"].values.reshape(len(train_data_all), 1)
-        x = train_data_all[["stringency_index", "total_cases"]].values.reshape(len(train_data_all), 2)
+        model = VAR(endog = train)
+        model_fit = model.fit()
 
-        model.fit(x, y)
+        prediction = model_fit.forecast(model_fit.y, steps = len(valid))
 
-        intercept = model.intercept_
-        coeff = model.coef_
-
-        rss = multivarRSS(test_data_all["new_cases"], test_data_all[["stringency_index", "total_cases"]], intercept, coeff)
-        test_data_all["predicted"] = intercept[0] + test_data_all["total_cases"]*coeff[0][1] + test_data_all["stringency_index"]*coeff[0][0]
-
-        print(test_data_all)
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=test_data_all["date"], y=test_data_all["predicted"]))
+        #converting predictions to dataframe
+        pred = pd.DataFrame(index=range(0,len(prediction)),columns=cols)
+        for j in range(0, len(cols)):
+            for i in range(0, len(prediction)):
+               pred.iloc[i][j] = prediction[i][j]
 
 
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x = pd.Series(valid.index.to_timestamp().values), y=pred["new_cases"]))
 
     fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", x=dataset["date"], y=dataset["new_cases"]))
 
