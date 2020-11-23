@@ -283,3 +283,6 @@ a {
     height: 100% !important;
 }
 
+#three_buttons > li {
+    transition: background 0.25s ease-in-out;
+}

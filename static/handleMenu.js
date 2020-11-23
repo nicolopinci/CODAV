@@ -1,6 +1,6 @@
 
-document.addEventListener("load", attachListeners);
-document.addEventListener("DOMContentLoaded", attachListeners);
+//document.addEventListener("load", attachListeners);
+//document.addEventListener("DOMContentLoaded", attachListeners);
 
 function attachListeners() {
     try {

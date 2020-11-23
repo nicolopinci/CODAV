@@ -53,13 +53,10 @@ graph_infos = []
 import urllib.request
 
 
-
-
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
-external_scripts = ["static/moveGraphs.js", "static/handleMenu.js"]
+external_scripts = ["static/moveGraphs.js"]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
-
 
 
 class GraphInfo:
@@ -160,24 +157,18 @@ def generate_layout():
         ),
 
         html.Div(id='output-data-upload'),
-        html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)]),
-       
-        html.A(
-            id='add-graph',
-            children=html.Div([
-                html.I("", className="fas fa-plus")
-            ])
-        ),
+        html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)])
         ]),
-
+        
+        
         html.Div(id = "leftSide", children = []),
         html.Div(id = "centralMap", children = []),
         html.Div(id = "rightSide", children = []),
 
         html.Ul(id = "three_buttons", children = [html.Li(id = "general_button", className="currentlySelected", children = ["General analyses"]), html.Li(id = "edu_button", children = ["Education"]), html.Li(id = "pred_button", children = ["Predictions"])]),
-        html.Div(id="predictions_container", className = "graphs_container", children=[]),
-        html.Div(id="edu_container", className = "graphs_container", children=[]),
         html.Div(id="analyses_container", className = "graphs_container", children=[]),
+        html.Div(id="edu_container", className = "graphs_container", children=[]),
+        html.Div(id="predictions_container", className = "graphs_container", children=[]),
 
         html.Div(id="filter_equivalence", style={'display': 'none'}),
 
@@ -189,6 +180,69 @@ def generate_layout():
     )
 
 app.layout = generate_layout
+
+# Display different tabs
+
+@app.callback(Output('predictions_container', 'style'), [Input('pred_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if n_clicks % 2 == 1:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+
+@app.callback(Output('edu_container', 'style'), [Input('edu_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if n_clicks % 2 == 1:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+@app.callback(Output('analyses_container', 'style'), [Input('general_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if (n_clicks + 1) % 2 == 1:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+
+# Colour the buttons
+
+@app.callback(Output('pred_button', 'className'), [Input('pred_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if n_clicks % 2 == 1:
+        return "currentlySelected"
+    else:
+        return "";
+
+
+@app.callback(Output('edu_button', 'className'), [Input('edu_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if n_clicks % 2 == 1:
+        return "currentlySelected"
+    else:
+        return "";
+
+
+@app.callback(Output('general_button', 'className'), [Input('general_button', 'n_clicks')])
+def change_button_style(n_clicks):
+
+    if (n_clicks + 1) % 2 == 1:
+        return "currentlySelected"
+    else:
+        return "";
+
+
+
+
 
 def parse_contents(covid, school):
     covid_content_type, covid_content_string = covid.split(',')
@@ -367,7 +421,7 @@ def add_ranking(covid_data, ranking_col, k):
             }
     )
 
-    fig.update_layout(title = "Top " + str(k) + " countries oer total cases per million", yaxis = dict(categoryorder = 'total ascending'))
+    fig.update_layout(title = "Top " + str(k) + " countries per total cases per million", yaxis = dict(categoryorder = 'total ascending'))
     fig.update_layout(yaxis_visible=False, yaxis_showticklabels=False)
 
     return [dcc.Graph(figure = fig, id = "left_ranking")]
@@ -433,6 +487,23 @@ def add_predictions(jsonified_data):
     #graph_divs.append(new_custom_graph())
 
     graph_divs.append(predict_world_cases("VAR"))
+
+
+
+
+    # Sklearn
+    axes = []
+    axes.append(Axis("Date", 'data["date"]'))
+    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
+
+    filters = []
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
+        
+    #graph_divs.append(new_custom_graph())
+
+    graph_divs.append(predict_world_cases("Linear"))
 
 
 
@@ -981,19 +1052,15 @@ def predict_world_cases(prediction_method):
         var_data.fillna(0, inplace = True)
        
         cols = var_data.columns
-        print("VAR DATA")
-        print(var_data)
 
-        train = var_data[:int(0.9*len(var_data))]
-        valid = var_data[int(0.9*len(var_data)):]
-        
-        print(train)
-        print(valid)
+        train = var_data[:int(0.8*len(var_data))]
+        valid = var_data[int(0.8*len(var_data)):]
+      
 
         model = VAR(endog = train)
         model_fit = model.fit()
 
-        prediction = model_fit.forecast(model_fit.y, steps = len(valid))
+        prediction = model_fit.forecast(model_fit.y, steps = 180 + len(valid)) # 180 days = 6 months
 
         #converting predictions to dataframe
         pred = pd.DataFrame(index=range(0,len(prediction)),columns=cols)
@@ -1001,8 +1068,37 @@ def predict_world_cases(prediction_method):
             for i in range(0, len(prediction)):
                pred.iloc[i][j] = prediction[i][j]
 
+        future_dates = pd.date_range(start = str(train.index[-1]), periods = 180 + len(valid))
 
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x = pd.Series(valid.index.to_timestamp().values), y=pred["new_cases"]))
+        # pd.Series(valid.index.to_timestamp().values)
+
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x = future_dates, y=pred["new_cases"]))
+    elif(prediction_method == "Linear"):
+        var_data = covid_data[covid_data["location"] == "Italy"]
+        var_data.set_index("date", inplace = True)
+        var_data.index = var_data.index.to_period("D")
+        var_data = var_data.sort_index()
+        var_data = var_data.loc[:, (var_data != var_data.iloc[0]).any()] # Delete constant value
+
+        var_data.drop(["tests_units", "Country", "Status", "Note"], axis = 1, inplace = True)
+
+        var_data.fillna(0, inplace = True)
+       
+        cols = var_data.columns
+
+        train = var_data[:int(0.8*len(var_data))]
+        valid = var_data[int(0.8*len(var_data)):]
+
+        model = LinearRegression()
+        model.fit(var_data[["stringency_index", "Physical_education"]], var_data["new_cases"])
+
+        future_input = [np.zeros(180)*100, np.ones(180)*2]
+        future_input = np.transpose(future_input)
+
+        future_prediction = model.predict(future_input)
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=pd.Series(valid.index.to_timestamp().values), y=future_prediction[:len(valid)]))
+
+
 
     fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", x=dataset["date"], y=dataset["new_cases"]))
 
