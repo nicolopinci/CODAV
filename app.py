@@ -65,7 +65,7 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 
 class GraphInfo:
-    def __init__(self, dataset, title, prediction_method = "", go_type = "Scatter", divide_traces =False, additional_columns = 'exog_var[["date", "stringency_index"]]', graph_type = "line", same_color = False, axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)', min_animation = 0, max_animation = 1, plot_type = "lines", hide_side_legend = False, width = 650, height = 500):
+    def __init__(self, dataset, title, prediction_method = "", go_type = "Scatter", divide_traces =False, additional_columns = 'exog_var[["date", "stringency_index"]]', graph_type = "line", same_color = False, axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale= [(0, "#ffeda0"), (0.5, "#feb24c"), (1, "#f03b20")], animation_frame = 'data["date"].astype(str)', min_animation = 0, max_animation = 1, plot_type = "lines", hide_side_legend = False, width = 650, height = 500):
         self.title = title 
         self.axes = axes
         self.color = color
@@ -180,7 +180,7 @@ def generate_layout():
           on=False,
           label="Color-blind",
           labelPosition="botttom"
-        ),
+          ),
 
         html.Ul(id = "three_buttons", children = [html.Li(id = "general_button", className="currentlySelected", children = ["General analyses"]), html.Li(id = "edu_button", children = ["Education"]), html.Li(id = "pred_button", children = ["Predictions"])]),
         html.Div(id="analyses_container", className = "graphs_container", children=[]),
@@ -202,7 +202,7 @@ app.layout = generate_layout
 
 # Display different tabs
 
-@app.callback(Output('predictions_container', 'style'), [Input('pred_button', 'n_clicks')])
+@app.callback(Output('predictions_container', 'style'), [Input('pred_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if n_clicks % 2 == 1:
@@ -212,7 +212,7 @@ def change_button_style(n_clicks):
 
 
 
-@app.callback(Output('edu_container', 'style'), [Input('edu_button', 'n_clicks')])
+@app.callback(Output('edu_container', 'style'), [Input('edu_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if n_clicks % 2 == 1:
@@ -221,7 +221,7 @@ def change_button_style(n_clicks):
         return {'display': 'none'}
 
 
-@app.callback(Output('analyses_container', 'style'), [Input('general_button', 'n_clicks')])
+@app.callback(Output('analyses_container', 'style'), [Input('general_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if (n_clicks + 1) % 2 == 1:
@@ -233,7 +233,7 @@ def change_button_style(n_clicks):
 
 # Colour the buttons
 
-@app.callback(Output('pred_button', 'className'), [Input('pred_button', 'n_clicks')])
+@app.callback(Output('pred_button', 'className'), [Input('pred_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if n_clicks % 2 == 1:
@@ -242,7 +242,7 @@ def change_button_style(n_clicks):
         return "";
 
 
-@app.callback(Output('edu_button', 'className'), [Input('edu_button', 'n_clicks')])
+@app.callback(Output('edu_button', 'className'), [Input('edu_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if n_clicks % 2 == 1:
@@ -251,15 +251,13 @@ def change_button_style(n_clicks):
         return "";
 
 
-@app.callback(Output('general_button', 'className'), [Input('general_button', 'n_clicks')])
+@app.callback(Output('general_button', 'className'), [Input('general_button', 'n_clicks')], prevent_initial_call = True)
 def change_button_style(n_clicks):
 
     if (n_clicks + 1) % 2 == 1:
         return "currentlySelected"
     else:
         return "";
-
-
 
 
 
@@ -291,16 +289,16 @@ def parse_contents(covid, school):
     return combined_datasets.to_json(date_format='iso', orient='split')
 
 @app.callback(Output('saved_data', 'children'),
-              [Input('upload-data', 'contents'), Input('upload-school', 'contents')])
+              [Input('upload-data', 'contents'), Input('upload-school', 'contents')], prevent_initial_call = True)
 def update_output(covid, school):
-    if covid is not None and school is not None:
+    if covid is not None and school is not None: 
         return parse_contents(covid, school)
     else:
         raise dash.exceptions.PreventUpdate
 
 
 @app.callback([Output("predictions_container", "children")],
-[Input("saved_data", "children")])
+[Input("saved_data", "children")], prevent_initial_call = True)
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
         return add_predictions(jsonified_data)
@@ -309,7 +307,7 @@ def initialize_graphs(jsonified_data):
 
 
 @app.callback([Output("edu_container", "children")],
-[Input("saved_data", "children")])
+[Input("saved_data", "children")], prevent_initial_call = True)
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
         return add_education(jsonified_data)
@@ -318,7 +316,7 @@ def initialize_graphs(jsonified_data):
 
 
 @app.callback([Output("analyses_container", "children")],
-[Input("saved_data", "children")])
+[Input("saved_data", "children")], prevent_initial_call = True)
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
         return add_analyses(jsonified_data)
@@ -327,7 +325,7 @@ def initialize_graphs(jsonified_data):
 
 
 @app.callback([Output("centralMap", "children")],
-[Input("saved_data", "children")])
+[Input("saved_data", "children")], prevent_initial_call = True)
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
         return add_central_map(jsonified_data, "total_cases_per_million")
@@ -336,7 +334,7 @@ def initialize_graphs(jsonified_data):
 
 
 @app.callback([Output("leftSide", "children")],
-[Input("saved_data", "children")])
+[Input("saved_data", "children")], prevent_initial_call = True)
 def initialize_graphs(jsonified_data):
     if(jsonified_data is not None):
         return add_ranking(jsonified_data, "total_cases_per_million", 10)
@@ -396,6 +394,7 @@ def add_central_map(covid_data, color_col):
     for feature in data["features"]:
         feature["properties"][color_col] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]][color_col].max()
         feature["properties"]["total_deaths"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_deaths"].max()
+        feature["properties"]["total_cases"] = covid_data[covid_data["iso_code"] == feature["properties"]["ISO_A3"]]["total_cases"].max()
 
 
     geojson = dl.GeoJSON(data=data,  # url to geojson file
@@ -450,16 +449,21 @@ def add_ranking(covid_data, ranking_col, k):
 
 
 
-@app.callback(Output("info", "children"), [Input("geojson", "hover_feature")])
+@app.callback(Output("info", "children"), [Input("geojson", "hover_feature")], prevent_initial_call = True)
 def info_hover(feature):
     return get_info(feature)
 
-@app.callback(Output("rightSide", "children"), [Input("geojson", "click_feature")])
+@app.callback(Output("rightSide", "children"), [Input("geojson", "click_feature")], prevent_initial_call = True)
 def country_click(feature):
     if feature is not None:
         header = [html.H1(feature["properties"]["ADMIN"])]
+
+        compare_deaths = go.Figure(data = [go.Bar(x = ["Cases", "Deaths (x 10)"], y = [feature["properties"]["total_cases"], 10*feature["properties"]["total_deaths"]])])
+        compare_deaths.update_layout(margin={"r":5,"t":60,"l":5,"b":5}, title = "Cases and deaths (x 10)")
+
+        # html.Img(src = app.get_asset_url("who.png"))
         #set_location = [html.Button(id = {'type': "set_location", 'index': feature["properties"]["ADMIN"]}, children = [html.I(className="far fa-chart-bar")])]
-        return header + [html.A([html.Img(src = app.get_asset_url("who.png")), html.Br(), html.P("Information from WHO")], target = "_blank", href = "https://www.who.int/countries/" + feature["properties"]["ISO_A3"])]
+        return header + [dcc.Graph(figure = compare_deaths, id = "sideHist"), html.Br(), html.A([html.P("Information from WHO")], target = "_blank", href = "https://www.who.int/countries/" + feature["properties"]["ISO_A3"])]
  
 
 def add_predictions(jsonified_data):
@@ -867,7 +871,7 @@ def new_custom_map():
     min_color = max(graph_info.min_animation, color_data.mean() - 2*color_data.std())
     max_color = min(graph_info.max_animation, color_data.mean() + 2*color_data.std())
    
-    fig = px.choropleth(data, range_color = [min_color, max_color], animation_frame = eval(graph_info.animation_frame), locations = eval(graph_info.axes[0].content).values, color = color_data.values, color_continuous_scale = graph_info.colorscale, locationmode = graph_info.location_mode)
+    fig = px.choropleth(data, range_color = [min_color, max_color], labels = dict(animation_frame = 'Day'), animation_frame = eval(graph_info.animation_frame), locations = eval(graph_info.axes[0].content).values, color = color_data.values, color_continuous_scale = graph_info.colorscale, locationmode = graph_info.location_mode)
     
     fig.update_layout(margin={"r":5,"t":60,"l":5,"b":5}, title = graph_info.title)
 
@@ -1002,7 +1006,7 @@ def new_custom_graph():
 Output({'type': 'GRPR', 'index': MATCH}, 'figure'), 
     [Input({'type':'PREDD', 'index': MATCH, 'internal_index': ALL}, 'value'),
     Input({'type':'PREDD', 'index': MATCH, 'internal_index': ALL}, 'id'),
-    Input("saved_data", "children")]
+    Input("saved_data", "children")], prevent_initial_call = True
     )
 def update_predictions(filter_value, filter_id, jsonified_data):
     return predict_world_cases(filter_value, filter_id, jsonified_data)[1]
@@ -1274,7 +1278,7 @@ Output({'type': 'GR', 'index': MATCH}, 'figure'),
      Input({'type':'SR', 'index': MATCH, 'internal_index': ALL}, 'value'),
 
      Input("color_blind", "on"),
-    Input("saved_data", "children")]
+    Input("saved_data", "children")], prevent_initial_call = True
     )
     
 def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_id, slider_value, color_blind, jsonified_data):
@@ -1302,6 +1306,7 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
     #fig = px.line(title = graph_info.title)
     fig = go.Figure(layout = {'title': graph_info.title,  'yaxis': dict(title=graph_info.axes[1].label), 'xaxis': dict(title=graph_info.axes[0].label)})
+    #fig = go.Figure(layout = {'title': graph_info.title})
 
 
     dd_filters = [f for f in graph_info.filters if f.filter_type=="Dropdown"]
@@ -1331,9 +1336,10 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
                 num_cols = ceil(sqrt(number_filters))
                 num_rows = ceil(number_filters/num_cols)
 
+
                 if(graph_info.divide_traces is True):
                     fig = make_subplots(rows = num_rows, cols = num_cols)  
-                    fig.update_layout(title = graph_info.title,  yaxis = dict(title=graph_info.axes[1].label), xaxis = dict(title=graph_info.axes[0].label))
+                    fig.update_layout(title = graph_info.title)
 
 
 
@@ -1384,8 +1390,15 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
                                 fig.add_trace(go.Scatter(line = dict(color = computed_color), mode = graph_info.plot_type, name=label, text = label, textposition = 'top center', x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + j%num_cols, row = 1 + floor(j/num_cols))
                             elif(graph_info.go_type == "Bar"):
                                 fig.add_trace(go.Bar(marker_color = computed_color, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + j%num_cols, row = 1 + floor(j/num_cols))
+                            
+                            if(1 + j%num_cols == 1): 
+                                fig.update_yaxes(title_text = graph_info.axes[1].label, col = 1, row = 1 + floor(j/num_cols))
+                            if(1 + floor(j/num_cols) == num_rows):
+                                fig.update_xaxes(title_text = graph_info.axes[0].label, row = num_rows, col = 1 + j%num_cols)
+                            if(sqrt(number_filters) != floor(sqrt(number_filters)) and 1 + floor(j/num_cols) == num_rows - 1 and number_filters%num_cols <= j%num_cols):
+                                fig.update_xaxes(title_text = graph_info.axes[0].label, row = num_rows - 1, col = 1 + j%num_cols)
 
-  
+
 
         fig.update_layout(showlegend=not graph_info.hide_side_legend)
         fig.update_xaxes(matches='x')
