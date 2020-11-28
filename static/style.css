@@ -10,6 +10,24 @@
     src: url(Retroica.ttf);
 }
 
+
+@font-face {
+    font-family: FontAwesome;
+    src: url(font-awesome/webfonts/fa-solid-900.ttf);
+}
+
+/*
+#leftSide::before {
+    content: "Ranking";
+    left: 10px;
+    position: relative;
+    display: inline-block;
+    margin-right: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+ */
+
 body {
     font-family: 'Armata', sans-serif;
 }
@@ -137,13 +155,25 @@ body {
     margin: 0px;
 }
 
+#left_ranking {
+    height: 100% !important;
+}
+
 #top_bar {
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.7);
     height: 70px;
     position: fixed;
     width: 100%;
     padding: 0;
     padding-left: 30px;
+    z-index: 9999;
+}
+#top_bar > h1 > span {
+    color: white !important;
+}
+
+#top_bar > h1 .fas {
+    color: #ff9999 !important;
 }
 
 #leftSide {
@@ -285,4 +315,96 @@ a {
 
 #three_buttons > li {
     transition: background 0.25s ease-in-out;
+}
+
+
+#color_blind {
+    display: inline-flex;
+    float: right;
+    margin-top: 40px;
+    margin-right: 40px;
+    background: white;
+    padding: 5px;
+}
+
+#color_blind > div {
+    display: block !important;
+}
+
+
+*[data-dash-is-loading="true"] {
+    visibility: hidden;
+}
+
+*[data-dash-is-loading="true"]::before {
+    content: "\f110";
+    font-family: "Font Awesome 5 Free";
+    position: absolute;
+    visibility: visible;
+    -webkit-animation: fa-spin 2s infinite linear;
+    animation: fa-spin 2s infinite linear;
+    font-weight: 900;
+    font-size: 40px;
+    padding: 5px;
+}
+
+
+
+/* Source: https://stackoverflow.com/questions/1853662/how-to-show-page-loading-div-until-the-page-has-finished-loading */
+
+.loader,
+.loader:after {
+    border-radius: 50%;
+    width: 10em;
+    height: 10em;
+}
+
+.loader {
+    margin: 60px auto;
+    font-size: 10px;
+    position: relative;
+    text-indent: -9999em;
+    border-top: 1.1em solid rgba(255, 255, 255, 0.2);
+    border-right: 1.1em solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1.1em solid rgba(255, 255, 255, 0.2);
+    border-left: 1.1em solid #ffffff;
+    -webkit-transform: translateZ(0);
+    -ms-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-animation: load8 1.1s infinite linear;
+    animation: load8 1.1s infinite linear;
+}
+
+@-webkit-keyframes load8 {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes load8 {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+#loadingDiv {
+    position: absolute;
+    ;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
 }

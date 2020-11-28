@@ -27,6 +27,9 @@ import os
 from math import log10, floor, ceil, sqrt
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.vector_ar.var_model import VAR
+import scipy
+from plotly.subplots import make_subplots
+import heapq
 
 
 import sklearn as sk
@@ -49,18 +52,20 @@ import dash_leaflet.express as dlx
 covid_data = None
 dimensions = []
 graph_infos = []
+colorblind_colors = ['rgb(27,158,119)','rgb(217,95,2)','rgb(117,112,179)']
+topmap_colors = ['#ffffb2','#fecc5c','#fd8d3c','#e31a1c']
 
 import urllib.request
 
 
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
-external_scripts = ["static/moveGraphs.js"]
+external_scripts = ["static/moveGraphs.js", "https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js", "static/loader.js"]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
 
 
 class GraphInfo:
-    def __init__(self, dataset, title, graph_type = "line", axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)', min_animation = 0, max_animation = 1, plot_type = "lines", hide_side_legend = False, width = 650, height = 500):
+    def __init__(self, dataset, title, prediction_method = "", go_type = "Scatter", divide_traces =False, additional_columns = 'exog_var[["date", "stringency_index"]]', graph_type = "line", same_color = False, axes = [], color = None, filters = [], animation = None, map_type = 'choropleth', location_mode = 'country names', colorscale='Portland', animation_frame = 'data["date"].astype(str)', min_animation = 0, max_animation = 1, plot_type = "lines", hide_side_legend = False, width = 650, height = 500):
         self.title = title 
         self.axes = axes
         self.color = color
@@ -78,6 +83,11 @@ class GraphInfo:
         self.hide_side_legend = hide_side_legend
         self.width = width
         self.height = height
+        self.go_type = go_type
+        self.same_color = same_color
+        self.additional_columns = additional_columns
+        self.prediction_method = prediction_method
+        self.divide_traces = divide_traces
 
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
@@ -149,12 +159,12 @@ def generate_layout():
               html.I("", className="fas fa-user-graduate")
         ]),
 
-
-
-       
         # Do not allow multiple files to be uploaded
         multiple=False
         ),
+
+      
+
 
         html.Div(id='output-data-upload'),
         html.H1(children=[html.I("", className="fas fa-virus"), html.Span("   "), html.Span(project_name)])
@@ -165,10 +175,19 @@ def generate_layout():
         html.Div(id = "centralMap", children = []),
         html.Div(id = "rightSide", children = []),
 
+         daq.BooleanSwitch(
+          id = "color_blind",
+          on=False,
+          label="Color-blind",
+          labelPosition="botttom"
+        ),
+
         html.Ul(id = "three_buttons", children = [html.Li(id = "general_button", className="currentlySelected", children = ["General analyses"]), html.Li(id = "edu_button", children = ["Education"]), html.Li(id = "pred_button", children = ["Predictions"])]),
         html.Div(id="analyses_container", className = "graphs_container", children=[]),
         html.Div(id="edu_container", className = "graphs_container", children=[]),
         html.Div(id="predictions_container", className = "graphs_container", children=[]),
+
+   
 
         html.Div(id="filter_equivalence", style={'display': 'none'}),
 
@@ -262,13 +281,12 @@ def parse_contents(covid, school):
     covid['date'] = covid['date'].dt.strftime("%Y-%m-%d")
 
     school["Physical_education"] = pd.Series()
-    school.loc[school["Status"] == "Fully open", "Physical_education"] = 2 
+    school.loc[school["Status"] == "Fully open", "Physical_education"] = 1
     school.loc[school["Status"] == "Partially open", "Physical_education"] = 1.5
-    school.loc[school["Status"] == "Closed due to COVID-19", "Physical_education"] = 1
+    school.loc[school["Status"] == "Closed due to COVID-19", "Physical_education"] = 2
 
 
     combined_datasets = pd.merge(covid, school, how = 'left', right_on = ['date', 'iso_code'], left_on = ['date', 'iso_code'])
-    print(combined_datasets[combined_datasets["location"] == "Italy"])
 
     return combined_datasets.to_json(date_format='iso', orient='split')
 
@@ -355,14 +373,17 @@ def add_central_map(covid_data, color_col):
 
     graph_divs = []
 
-    max_cases = covid_data[covid_data["location"] != "World"][color_col].max()
-    optimal_step = max_cases/5
+    ds = covid_data[covid_data["location"] != "World"][color_col]
+    max_cases = ds.max()
+    twosd_distance = ds.mean() + 4*ds.std()
 
-    print(max_cases)
+    colorscale = topmap_colors
 
-    classes = np.arange(start = 0, stop = max_cases, step = round(optimal_step, -int(floor(log10(abs(optimal_step))))))
-    
-    colorscale = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026']
+    optimal_step = twosd_distance/len(topmap_colors)
+
+
+    classes = np.arange(start = 0, stop = twosd_distance, step = round(optimal_step, -int(floor(log10(abs(optimal_step))))))[:len(topmap_colors)]
+    #colorscale = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026']
     style = dict(weight=2, opacity=1, color='white', dashArray='3', fillOpacity=0.7)
     # Create colorbar.
     ctg = ["{}+".format(cls, classes[i + 1]) for i, cls in enumerate(classes[:-1])] + ["{}+".format(classes[-1])]
@@ -417,12 +438,13 @@ def add_ranking(covid_data, ranking_col, k):
             textposition = "inside",
             orientation='h'),
             layout={
-                'margin': {'l': 0, 'r': 0, 't': 50, 'b': 0},
+                'margin': {'l': 20, 'r': 0, 't': 5, 'b': 0},
             }
     )
 
-    fig.update_layout(title = "Top " + str(k) + " countries per total cases per million", yaxis = dict(categoryorder = 'total ascending'))
-    fig.update_layout(yaxis_visible=False, yaxis_showticklabels=False)
+
+    fig.update_layout(yaxis = dict(categoryorder = 'total ascending'))
+    fig.update_layout(yaxis_visible=True, yaxis_showticklabels=False, yaxis_title = "Ranking (total cases/million)")
 
     return [dcc.Graph(figure = fig, id = "left_ranking")]
 
@@ -436,6 +458,7 @@ def info_hover(feature):
 def country_click(feature):
     if feature is not None:
         header = [html.H1(feature["properties"]["ADMIN"])]
+        #set_location = [html.Button(id = {'type': "set_location", 'index': feature["properties"]["ADMIN"]}, children = [html.I(className="far fa-chart-bar")])]
         return header + [html.A([html.Img(src = app.get_asset_url("who.png")), html.Br(), html.P("Information from WHO")], target = "_blank", href = "https://www.who.int/countries/" + feature["properties"]["ISO_A3"])]
  
 
@@ -446,80 +469,49 @@ def add_predictions(jsonified_data):
     # SARIMAX
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
-    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
+    axes.append(Axis("New cases", ["new_cases_smoothed"], [""]))
+
 
     filters = []
-    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = False))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "SARIMAX", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  prediction_method = "SARIMAX", title = "SARIMAX", axes = axes, filters = filters))
         
     #graph_divs.append(new_custom_graph())
 
-    graph_divs.append(predict_world_cases("SARIMAX"))
+    graph_divs.append(predict_world_cases(filters[0].default_value[0], None)[0])
 
 
     # Prophet
-    axes = []
-    axes.append(Axis("Date", 'data["date"]'))
-    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
+  
 
     filters = []
-    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = False))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  prediction_method = "Prophet", title = "Prophet", axes = axes, filters = filters))
         
-    #graph_divs.append(new_custom_graph())
-
-    graph_divs.append(predict_world_cases("Prophet"))
+    graph_divs.append(predict_world_cases(filters[0].default_value[0], None)[0])
 
 
 
     # VAR
-    axes = []
-    axes.append(Axis("Date", 'data["date"]'))
-    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
-
+  
+    
     filters = []
-    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+    filters.append(Filter(default_value = ["Italy"], column_name = "location", multi = False))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data, prediction_method = "VAR", title = "VAR", axes = axes, filters = filters))
         
-    #graph_divs.append(new_custom_graph())
-
-    graph_divs.append(predict_world_cases("VAR"))
+    graph_divs.append(predict_world_cases(filters[0].default_value[0], None)[0])
 
 
+    # Initialize preset container and return
+    preset_container = html.Div(children = graph_divs)
 
-
-    # Sklearn
-    axes = []
-    axes.append(Axis("Date", 'data["date"]'))
-    axes.append(Axis("Full openness", ['data["Physical_education"]'], ["Full openness"]))
-
-    filters = []
-    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
-
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Prophet", axes = axes, filters = filters))
-        
-    #graph_divs.append(new_custom_graph())
-
-    graph_divs.append(predict_world_cases("Linear"))
-
-
-
-    '''
-    # School open vs stringency
-    axes = []
-    axes.append(Axis("Date", 'data["date"]'))
-    axes.append(Axis("Stringency to physical education availability ratio", ['data["stringency_index"]/data["Physical_education"]'], ["SPE"]))
-
-    filters = []
-    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
-
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
-        
-    graph_divs.append(new_custom_graph())
-
+    return [preset_container]
+    
+def add_analyses(jsonified_data):
+    graph_divs = []
 
     # School open vs stringency
     axes = []
@@ -529,7 +521,7 @@ def add_predictions(jsonified_data):
     filters = []
     filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
 
-    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  divide_traces = True, title = "Stringency to physical education availability (SPE) ratio", axes = axes, filters = filters))
         
     graph_divs.append(new_custom_graph())
 
@@ -762,14 +754,9 @@ def add_predictions(jsonified_data):
 
 
 
-    '''
-
-    # Initialize preset container and return
-    preset_container = html.Div(children = graph_divs)
-    return [preset_container]
     
-def add_analyses(jsonified_data):
-    graph_divs = []
+
+
     # Graph 1: new increment with respect to previous (hospitalization)
     axes = []
     axes.append(Axis("Date", 'data["date"]'))
@@ -798,11 +785,24 @@ def add_analyses(jsonified_data):
     graph_divs.append(new_custom_graph())
 
 
+
+    # Population density vs cases per million
+    axes = []
+    axes.append(Axis("Population density", 'mask_max(data, "total_cases_per_million")["population_density"]'))
+    axes.append(Axis("Cases per million", ['[data["total_cases_per_million"].max()]'], ["Cases per million"]))
+
+    filters = []
+    filters.append(Filter(show_on_marker = True, default_value = ["Norway", "Italy", "Sweden"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  title = "Population density vs cases per million", axes = axes, filters = filters, hide_side_legend = True, plot_type = "markers+text", same_color = True))
+        
+    graph_divs.append(new_custom_graph())
+
+
+
     # Initialize preset container and return
     preset_container = html.Div(children = graph_divs)
     return [preset_container]
-
-
 
 def add_education(jsonified_data):
     graph_divs = []
@@ -819,11 +819,25 @@ def add_education(jsonified_data):
         
     graph_divs.append(new_custom_graph())
 
+
+    # Histogram
+    axes = []
+    axes.append(Axis("Status", 'data["location"]'))
+    axes.append(Axis("Number of days", ['[data[data["Status"] == "Fully open"]["Status"].count()]', '[data[data["Status"] == "Partially open"]["Status"].count()]', '[data[data["Status"] == "Closed due to COVID-19"]["Status"].count()]'], ["Fully open", "Partially open", "Closed due to COVID-19"]))
+
+    filters = []
+    filters.append(Filter(filter_type="DatePickerRange", column_name = "date"))
+    filters.append(Filter(default_value = ["Norway"], column_name = "location", multi = True))
+
+    graph_infos.append(GraphInfo(dataset = jsonified_data,  go_type = "Bar", title = "School status", axes = axes, filters = filters))
+        
+    graph_divs.append(new_custom_graph())
+
+
+
     # Initialize preset container and return
     preset_container = html.Div(children = graph_divs)
     return [preset_container]
-
-
 
 def new_custom_map():
     ind = len(graph_infos)-1
@@ -880,7 +894,9 @@ def new_custom_graph():
     #graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
     graph_div = html.Div(children = [])
     #fig = px.line(title = graph_info.title)
+
     fig = go.Figure(layout = {'title': graph_info.title})
+
 
     subindex = 0
     for f in graph_info.filters:
@@ -914,6 +930,16 @@ def new_custom_graph():
                 def_val_list = eval(f.default_value)
 
 
+            number_filters = len(def_val_list)
+            num_cols = ceil(sqrt(number_filters))
+            num_rows = ceil(number_filters/num_cols)
+
+            if(graph_info.divide_traces is True):
+                fig = make_subplots(rows = num_rows, cols = num_cols)
+                fig.update_layout(title = graph_info.title,  yaxis = dict(title=graph_info.axes[1].label), xaxis = dict(title=graph_info.axes[0].label))
+
+
+
             for defv in def_val_list:
                 data = covid_data[covid_data[f.column_name] == defv]
 
@@ -928,8 +954,18 @@ def new_custom_graph():
                             label = filter_value[i][j] + " - " + label
                         else:
                             label = filter_value[i][j]
-                        
-                fig.add_trace(go.Scatter(mode = graph_info.plot_type, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+
+                if(graph_info.divide_traces is False):
+                    if(graph_info.go_type == "Scatter"):      
+                        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name=label, text = label, textposition = 'top center', x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                    elif(graph_info.go_type == "Bar"):
+                        fig.add_trace(go.Bar(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                else:
+                    if(graph_info.go_type == "Scatter"):      
+                        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name=label, text = label, textposition = 'top center', x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + lab%num_cols, row = 1 + floor(lab/num_rows))
+                    elif(graph_info.go_type == "Bar"):
+                        fig.add_trace(go.Bar(name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + lab%num_cols, row = 1 + floor(lab/num_rows))
+
         subindex += 1
 
         covid_data = data
@@ -959,103 +995,215 @@ def new_custom_graph():
     return graph_div
 
 
-def predict_world_cases(prediction_method):
 
-    print(prediction_method)
-    ind = len(graph_infos)-1
+
+
+@app.callback( 
+Output({'type': 'GRPR', 'index': MATCH}, 'figure'), 
+    [Input({'type':'PREDD', 'index': MATCH, 'internal_index': ALL}, 'value'),
+    Input({'type':'PREDD', 'index': MATCH, 'internal_index': ALL}, 'id'),
+    Input("saved_data", "children")]
+    )
+def update_predictions(filter_value, filter_id, jsonified_data):
+    return predict_world_cases(filter_value, filter_id, jsonified_data)[1]
+
+
+def predict_world_cases(filter_value, filter_id, jsonified_data = None):
+
+    ind = None
+    intind = None
+
+    if jsonified_data is not None:
+        if(len(filter_id) > 0):
+            ind = filter_id[0]['index']
+            intind = filter_id[0]['internal_index']
+
+    else:
+         ind = len(graph_infos)-1
+         
     graph_info = graph_infos[ind]
-    covid_data = pd.read_json(graph_info.dataset, orient="split")
 
+
+    # Collect the graph information
+   
+    prediction_method = graph_info.prediction_method
+    quantity_to_predict = graph_info.axes[1].content[0]
+
+
+    if(jsonified_data is None):
+        covid_data = pd.read_json(graph_info.dataset, orient="split")
+    else:
+        covid_data = pd.read_json(jsonified_data, orient="split")
+
+    f = graph_info.filters[0]
+
+    filter_menu = dcc.Dropdown(id={'type': 'PREDD', 'index': ind, 'internal_index': 0}, value=f.default_value[0], options = [{'label': i, 'value': i} for i in covid_data[f.column_name].unique()], multi=f.multi)
+
+    filter_div = html.Div(className = "filterDiv", children = [])
+        
+    filter_div.children.append(filter_menu)
 
     #graph_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
     graph_div = html.Div(children = [])
-    #fig = px.line(title = graph_info.title)
-    fig = go.Figure(layout = {'title': "Prediction of the world cases in the next 6 months"})
+    fig = go.Figure(layout = {'title': graph_info.title, 'xaxis_title': "Date", 'yaxis_title': "New cases (smoothed)"})
 
-    dataset = covid_data.loc[covid_data['date'] >= pd.to_datetime(datetime.date(2020, 1, 22))]
-    dataset = dataset.loc[covid_data['location'] == "Italy"]
+    first_phase_start = datetime.datetime.strptime("2020-01-22", "%Y-%m-%d")
 
-    dataset[["new_cases", "stringency_index"]].fillna(0, inplace = True)
-    dataset["total_cases"].fillna(method = 'bfill', inplace = True)
+    # Consider the dataset only from when there are meaningful collected data
+    dataset = covid_data.loc[covid_data['date'] >= first_phase_start]
+    
+    if(not isinstance(filter_value, str)):
+        filter_value = filter_value[0]
 
-
-    # Only dates and values (simple case but no good results)
-    prediction_dataset = pd.DataFrame(columns = ['date', 'value'])
-    dates = list(dataset['date'])
-    prediction_dataset['date'] = dates
-    prediction_dataset['value'] = dataset["new_cases"].to_list()
-    prediction_dataset.set_index("date", inplace = True)
-
-    # Multiple attributes
-    pred_multi_dataset = pd.DataFrame(columns = ['date', 'value', 'stringency'])
-    dates = list(dataset['date'])
-    pred_multi_dataset['date'] = dates
-    pred_multi_dataset['value'] = dataset["new_cases"].to_list()
-    pred_multi_dataset['stringency'] = dataset["stringency_index"].to_list()
-    pred_multi_dataset.set_index("date", inplace = True)
+    var_data = covid_data.loc[covid_data["location"] == filter_value]
+    var_data.set_index("date", inplace = True, drop = True)
+    var_data.index = var_data.index.to_period("D")
+    var_data = var_data.sort_index()
+    population = var_data["population"].iloc[0]
+    var_data = var_data.loc[:, (var_data != var_data.iloc[0]).any()] # Delete constant values (useless for predictions)
 
 
+    try:
+        var_data.drop(["tests_units"], axis = 1, inplace = True) # Delete machine-unreadable values (non-standard strings)
+    except:
+        pass
 
-    start_date = "2020-11-14"
+    try:
+        var_data.drop(["Country"], axis = 1, inplace = True) # Delete machine-unreadable values (non-standard strings)
+    except:
+        pass
+        
+    try:
+        var_data.drop(["Status"], axis = 1, inplace = True) # Delete machine-unreadable values (non-standard strings)
+    except:
+        pass
+        
+    try:
+        var_data.drop(["Note"], axis = 1, inplace = True) # Delete machine-unreadable values (non-standard strings)
+    except:
+        pass
 
-    train = pred_multi_dataset.loc[pred_multi_dataset.index < pd.to_datetime(start_date)]
-    test = pred_multi_dataset.loc[pred_multi_dataset.index >= pd.to_datetime(start_date)]
+    var_data["total_cases"].fillna(method = 'bfill', inplace = True) # it does not make sense to put them at zero, since they are cumulative
+    var_data.fillna(0, inplace = True)
+       
+    cols = var_data.columns
 
-    train.fillna(0, inplace = True)
-    test.fillna(0, inplace = True)
 
+
+    '''
+    derivative = var_data[quantity_to_predict].diff()
+    #second_derivative = derivative.diff()
+                   
+    threshold = 0.1*derivative.max()
+
+    if(prediction_method == "VAR"):
+        threshold = 0.02*derivative.max()
+ 
+    
+    second_phase_extremes = derivative.loc[derivative < threshold]
+    second_phase_extremes = second_phase_extremes.loc[derivative >= 0]
+    
+    if(len(second_phase_extremes) == 0):
+        second_phase_extremes = [0.0]
+
+    second_phase_nomax = second_phase_extremes.loc[second_phase_extremes >= 0]
+
+    second_phase_index = second_phase_nomax.iloc[[-1]].index
+   
+    print(second_phase_index[0])
+    '''
+
+    peaks, properties = scipy.signal.find_peaks(var_data[quantity_to_predict], plateau_size = [0, 50], distance = 30)
+    _, beginning_peak, end_peak = scipy.signal.peak_prominences(var_data[quantity_to_predict], peaks)
+    
+
+    after_last_beginning = var_data[int(beginning_peak.max()):]
+
+    second_phase_start = after_last_beginning[quantity_to_predict].idxmax(axis = 0, skipna = True)
+
+    
+    if(prediction_method == "VAR"):
+        second_phase_start = after_last_beginning[quantity_to_predict].idxmin(axis = 0, skipna = True)
+        second_phase_start += datetime.timedelta(days = int(len(after_last_beginning)*0.15))
+
+    second_phase_start = datetime.datetime.strptime(str(second_phase_start), "%Y-%m-%d")
+    second_phase_start += datetime.timedelta(days = 2)
+
+    #second_phase_start = first_phase_start + datetime.timedelta(days = int(beginning_peak.max())) + datetime.timedelta(days = int(max_index))
+
+    end_available_data = datetime.datetime.strptime(str(pd.Series(var_data.index.to_timestamp().values).iloc[-1]).split(" ")[0] , "%Y-%m-%d")
+
+    train_proportion = abs((second_phase_start - first_phase_start).days)/abs((first_phase_start - end_available_data).days)
+
+    train_proportion = min(train_proportion, 0.99)
+
+    train = var_data[:int(train_proportion*len(var_data))]
+    valid = var_data[int(train_proportion*len(var_data)):]
+    
+    start_date =  str(train.index[-1])
+    end_date = str(datetime.datetime.strptime(str(valid.index[-1]), "%Y-%m-%d") + datetime.timedelta(days = 180))
+
+  
     if(prediction_method == "SARIMAX"):
 
-        train.drop(columns = ["stringency"], inplace = True)
-        test.drop(columns = ["stringency"], inplace = True)
-        #model = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 10, max_q = 10, m=1, d=None, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
-        #print(model.summary())
+        
+        #exog_train = eval(graph_info.additional_columns.replace("exog_var", "train"))
+        train = train[quantity_to_predict]
+        #exog_test = eval(graph_info.additional_columns.replace("exog_var", "valid"))
+        test = valid[quantity_to_predict]
 
-        model = SARIMAX(train, order=(2, 2, 10)) 
+        '''
+        print("EXOG 1")
+        print(exog_test)
+        '''
+
+        step_wise = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 5, max_q = 5, m=1, d=2, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
+
+        model = SARIMAX(train, order=step_wise.order) 
     
         # New cases per day
         # World (7, 1, 8), Italy (1, 2, 0), Norway (2, 2, 3)
 
         results = model.fit(disp = False)
 
-        sarimax_prediction = results.predict(start = start_date, end='2021-06-01', dynamic=False)
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=sarimax_prediction.index, y=sarimax_prediction))
+        '''
+        for i in range(180):
+            exog_test = exog_test.append(pd.Series(), ignore_index=True)
 
+        exog_test.fillna(method = "ffill", inplace = True)
+
+        print("EXOG 2")
+        print(exog_test)
+        '''
+
+        #sarimax_prediction = results.predict(exog = big_test, start = start_date, end= end_date)
+        sarimax_prediction = results.forecast(steps = len(valid) + 180)
+
+        sarimax_prediction[sarimax_prediction > population] = population
+        sarimax_prediction[sarimax_prediction < 0] = 0
+
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction",  line = dict(dash = "dash"), x=pd.Series(sarimax_prediction.index.to_timestamp().values), y=sarimax_prediction))
     elif(prediction_method == "Prophet"):
-        train["ds"] = train.index
-        train.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
-        test.rename(columns = {'date': 'ds', 'value': 'y'}, inplace = True)
+        train["ds"] = train.index.to_timestamp()
+        train.rename(columns = {'date': 'ds', quantity_to_predict: 'y'}, inplace = True)
+        valid.rename(columns = {'date': 'ds', quantity_to_predict: 'y'}, inplace = True)
 
         m = Prophet()
         # https://stackoverflow.com/questions/54544285/is-it-possible-to-do-multivariate-multi-step-forecasting-using-fb-prophet to add parameters
 
         m.fit(train)
-        #future = m.make_future_dataframe(periods = len(test) - 1)
         
-        future = m.make_future_dataframe(periods = 180)
+        future = m.make_future_dataframe(periods = 180 + len(valid))
 
         forecast = m.predict(future)
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat"]))
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat_lower"]))
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=forecast["ds"], y=forecast["yhat_upper"]))
 
+
+        forecast[["yhat", "yhat_lower", "yhat_upper"]] = forecast[["yhat", "yhat_lower", "yhat_upper"]].apply(lambda x: [max(0, min(y, population)) for y in x])
+
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, line_color = "blue",  line = dict(dash = "dash"), name="Prediction", x=forecast["ds"], y=forecast["yhat"]))
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, fill = "tonexty",  marker=dict(color="#989898"), showlegend = False, line = dict(width = 0), fillcolor='rgba(152, 152, 152, 0.5)', name="Prediction (lower bound)", x=forecast["ds"], y=forecast["yhat_lower"]))
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, fill = "tonexty", name="Prediction (upper bound)", marker = dict(color="#989898"), line = dict(width = 0), showlegend = False, x=forecast["ds"], y=forecast["yhat_upper"]))
     elif(prediction_method == "VAR"):
-
-        var_data = covid_data[covid_data["location"] == "Italy"]
-        var_data.set_index("date", inplace = True)
-        var_data.index = var_data.index.to_period("D")
-        var_data = var_data.sort_index()
-        var_data = var_data.loc[:, (var_data != var_data.iloc[0]).any()] # Delete constant value
-
-        var_data.drop(["tests_units", "Country", "Status", "Note"], axis = 1, inplace = True)
-
-        var_data.fillna(0, inplace = True)
-       
-        cols = var_data.columns
-
-        train = var_data[:int(0.8*len(var_data))]
-        valid = var_data[int(0.8*len(var_data)):]
-      
 
         model = VAR(endog = train)
         model_fit = model.fit()
@@ -1068,41 +1216,20 @@ def predict_world_cases(prediction_method):
             for i in range(0, len(prediction)):
                pred.iloc[i][j] = prediction[i][j]
 
-        future_dates = pd.date_range(start = str(train.index[-1]), periods = 180 + len(valid))
+        future_dates = pd.date_range(start = start_date, periods = 180 + len(valid))
 
         # pd.Series(valid.index.to_timestamp().values)
 
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x = future_dates, y=pred["new_cases"]))
-    elif(prediction_method == "Linear"):
-        var_data = covid_data[covid_data["location"] == "Italy"]
-        var_data.set_index("date", inplace = True)
-        var_data.index = var_data.index.to_period("D")
-        var_data = var_data.sort_index()
-        var_data = var_data.loc[:, (var_data != var_data.iloc[0]).any()] # Delete constant value
+        pred[pred[quantity_to_predict] > population] = population
+        pred[pred[quantity_to_predict] < 0] = 0
+        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", line = dict(dash = "dash"), x = future_dates, y=pred[quantity_to_predict]))
+   
 
-        var_data.drop(["tests_units", "Country", "Status", "Note"], axis = 1, inplace = True)
+    fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", line_color = "red", x=pd.Series(var_data.index.to_timestamp().values), y=var_data[quantity_to_predict]))
 
-        var_data.fillna(0, inplace = True)
-       
-        cols = var_data.columns
+    
 
-        train = var_data[:int(0.8*len(var_data))]
-        valid = var_data[int(0.8*len(var_data)):]
-
-        model = LinearRegression()
-        model.fit(var_data[["stringency_index", "Physical_education"]], var_data["new_cases"])
-
-        future_input = [np.zeros(180)*100, np.ones(180)*2]
-        future_input = np.transpose(future_input)
-
-        future_prediction = model.predict(future_input)
-        fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction", x=pd.Series(valid.index.to_timestamp().values), y=future_prediction[:len(valid)]))
-
-
-
-    fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", x=dataset["date"], y=dataset["new_cases"]))
-
-    graph = dcc.Graph(id={'type': 'GR', 'index': ind}, figure=fig)
+    graph = dcc.Graph(id={'type': 'GRPR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
 
     resize_button = html.I("")
@@ -1113,10 +1240,10 @@ def predict_world_cases(prediction_method):
 
     #graph_div.children.append(move_button)
     #graph_div.children.append(resize_button)
+    graph_div.children.append(filter_div)
     graph_div.children.append(graph)
 
-
-    return graph_div
+    return [graph_div, fig]
 
 def rss(y, y_hat):
     return np.square(y - y_hat).sum()
@@ -1146,11 +1273,11 @@ Output({'type': 'GR', 'index': MATCH}, 'figure'),
     Input({'type':'SR', 'index': MATCH, 'internal_index': ALL}, 'id'),
      Input({'type':'SR', 'index': MATCH, 'internal_index': ALL}, 'value'),
 
-
+     Input("color_blind", "on"),
     Input("saved_data", "children")]
     )
     
-def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_id, slider_value, jsonified_data):
+def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_id, slider_value, color_blind, jsonified_data):
     ind = None
     type_filter = None
 
@@ -1199,6 +1326,17 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
         for i in range(0, len(filter_id)):
             if(filter_id[i]['type'] == "DD"):
+
+                number_filters = len(filter_value[i])
+                num_cols = ceil(sqrt(number_filters))
+                num_rows = ceil(number_filters/num_cols)
+
+                if(graph_info.divide_traces is True):
+                    fig = make_subplots(rows = num_rows, cols = num_cols)  
+                    fig.update_layout(title = graph_info.title,  yaxis = dict(title=graph_info.axes[1].label), xaxis = dict(title=graph_info.axes[0].label))
+
+
+
                 for j in range(0, len(filter_value[i])): # For each choice in a single dropdown (e.g. list of countries)
                     f = dd_filters[i]
                     data = covid_data[covid_data[f.column_name] == filter_value[i][j]]
@@ -1220,18 +1358,39 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
                         #green_component = (20 + 190*(ord(label[1].upper()) - 65)/25)
                         #blue_component = (20 + 190*(ord(label[2].upper()) - 65)/25) + lab*30
 
-                        rgb_color = plotly.colors.DEFAULT_PLOTLY_COLORS[j%10].lstrip("rgb(").rstrip(")").split(", ")
+                        if(color_blind is True):
+                            rgb_color = colorblind_colors[j%3].lstrip("rgb(").rstrip(")").split(",")
+                        else:
+                            rgb_color = plotly.colors.DEFAULT_PLOTLY_COLORS[j%10].lstrip("rgb(").rstrip(")").split(", ")
+
                         rgb_color = list(map(int, rgb_color))
 
-                        computed_color = "rgb(" + str(rgb_color[0]*(1+lab/4)) + ", " + str(rgb_color[1]*(1+lab/4)) + ", " + str(rgb_color[2]*(1+lab/4)) + ")"
+                        if(graph_info.same_color is True):
+                            computed_color = plotly.colors.DEFAULT_PLOTLY_COLORS[0]
+                        else:
+                            computed_color = "rgb(" + str(rgb_color[0]*(1+lab/4)) + ", " + str(rgb_color[1]*(1+lab/4)) + ", " + str(rgb_color[2]*(1+lab/4)) + ")"
 
 
                         color_properties = graph_info.plot_type[:-1] + "=dict(color = '" + computed_color + "')"
-                        fig.add_trace(go.Scatter(line = dict(color = computed_color), mode=graph_info.plot_type, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                        
+                        
+                        if(graph_info.divide_traces is False):
+                            if(graph_info.go_type == "Scatter"):      
+                                fig.add_trace(go.Scatter(line = dict(color = computed_color),  mode = graph_info.plot_type, name=label, text = label, textposition = 'top center', x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                            elif(graph_info.go_type == "Bar"):
+                                fig.add_trace(go.Bar(marker_color = computed_color, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)))
+                        else:
+                            if(graph_info.go_type == "Scatter"):      
+                                fig.add_trace(go.Scatter(line = dict(color = computed_color), mode = graph_info.plot_type, name=label, text = label, textposition = 'top center', x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + j%num_cols, row = 1 + floor(j/num_cols))
+                            elif(graph_info.go_type == "Bar"):
+                                fig.add_trace(go.Bar(marker_color = computed_color, name=label, x=eval(graph_info.axes[0].content), y=eval(y_trace)), col = 1 + j%num_cols, row = 1 + floor(j/num_cols))
 
-         
+  
 
         fig.update_layout(showlegend=not graph_info.hide_side_legend)
+        fig.update_xaxes(matches='x')
+        fig.update_yaxes(matches='y')
+
         if(graph_info.axes[0].log_scale is True):
             fig.update_xaxes(type="log")
 
