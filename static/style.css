@@ -186,7 +186,11 @@ body {
 }
 
 #rightSide * {
-    padding: 20px;
+    padding: 0px;
+}
+
+#rightSide .svg-container {
+    padding: 0px !important;
 }
 
 #rightSide > h1 {
