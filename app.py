@@ -426,7 +426,7 @@ def add_central_map(covid_data, color_col):
     covid_data = pd.read_json(covid_data, orient="split")
 
     covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
-    covid_data.sort_values('date', ascending = True, inplace = True)
+    covid_data = covid_data.sort_values('date', ascending = True, inplace = False)
 
 
     graph_divs = []
@@ -483,10 +483,10 @@ def add_ranking(covid_data, ranking_col, k):
     covid_data = pd.read_json(covid_data, orient="split")
 
     covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
-    covid_data.sort_values('date', ascending = True, inplace = True)
+    covid_data = covid_data.sort_values('date', ascending = True, inplace = False)
 
     covid_last = covid_data[covid_data["date"] == covid_data["date"].max()]
-    covid_last.sort_values(ranking_col, ascending = False, inplace = True)
+    covid_last = covid_last.sort_values(ranking_col, ascending = False, inplace = False)
 
     y =  covid_last["location"].head(k)
 
@@ -852,7 +852,7 @@ def new_custom_map():
     covid_data = pd.read_json(graph_info.dataset, orient="split")
 
     covid_data['date'] = pd.to_datetime(covid_data['date'], dayfirst=True)
-    covid_data.sort_values('date', ascending = True, inplace = True)
+    covid_data = covid_data.sort_values('date', ascending = True, inplace = False)
 
     #map_div = dash_draggable.dash_draggable(axis="both", grid=[30, 30], children = [])
     map_div = html.Div(children = [])
