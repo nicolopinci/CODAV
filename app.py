@@ -1458,4 +1458,4 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
