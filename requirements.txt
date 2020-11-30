@@ -1,10 +1,10 @@
-argon2-cffi @ file:///C:/ci/argon2-cffi_1596828585465/work
-attrs @ file:///tmp/build/80754af9/attrs_1598374659300/work
+argon2-cffi 
+attrs 
 backcall==0.2.0
 bleach==3.1.5
 Brotli==1.0.9
 certifi==2020.6.20
-cffi @ file:///C:/ci/cffi_1598352710791/work
+cffi 
 chardet==3.0.4
 click==7.1.2
 cmdstanpy==0.9.5
@@ -33,9 +33,9 @@ gunicorn==20.0.4
 heroku==0.1.4
 holidays==0.10.3
 idna==2.10
-importlib-metadata @ file:///C:/ci/importlib-metadata_1593446511143/work
-ipykernel @ file:///C:/ci/ipykernel_1596190155316/work/dist/ipykernel-5.3.4-py3-none-any.whl
-ipython @ file:///C:/ci/ipython_1598865816163/work
+importlib-metadata 
+ipykernel
+ipython
 ipython-genutils==0.2.0
 ipywidgets==7.5.1
 itsdangerous==1.1.0
@@ -44,8 +44,8 @@ Jinja2==2.11.2
 joblib==0.16.0
 jsonschema==3.2.0
 jupyter==1.0.0
-jupyter-client @ file:///tmp/build/80754af9/jupyter_client_1594826976318/work
-jupyter-console @ file:///tmp/build/80754af9/jupyter_console_1598884538475/work
+jupyter-client 
+jupyter-console 
 jupyter-core==4.6.3
 kiwisolver==1.2.0
 korean-lunar-calendar==0.2.1
@@ -58,10 +58,10 @@ mkl-random==1.1.1
 mkl-service==2.3.0
 nbconvert==5.6.1
 nbformat==5.0.7
-notebook @ file:///C:/ci/notebook_1596840175976/work
+notebook 
 numpy==1.16.0
 packaging==20.4
-pandas @ file:///C:/ci/pandas_1598371563714/work
+pandas 
 pandocfilters==1.4.2
 parso==0.7.0
 patsy==0.5.1
@@ -70,9 +70,9 @@ Pillow==7.2.0
 plotly==4.9.0
 pmdarima==1.7.1
 prometheus-client==0.8.0
-prompt-toolkit @ file:///tmp/build/80754af9/prompt-toolkit_1598885458782/work
+prompt-toolkit 
 protobuf==3.14.0
-pycparser @ file:///tmp/build/80754af9/pycparser_1594388511720/work
+pycparser 
 Pygments==2.6.1
 PyMeeus==0.3.7
 pyparsing==2.4.7
@@ -83,7 +83,7 @@ pytz==2020.1
 pywin32==227
 pywinpty==0.5.7
 pyzmq==19.0.1
-qtconsole @ file:///tmp/build/80754af9/qtconsole_1598374667791/work
+qtconsole 
 QtPy==1.9.0
 requests==2.25.0
 retrying==1.3.3
@@ -104,7 +104,7 @@ tqdm==4.51.0
 traitlets==4.3.3
 urllib3==1.26.2
 visdcc==0.0.40
-wcwidth @ file:///tmp/build/80754af9/wcwidth_1593447189090/work
+wcwidth
 webencodings==0.5.1
 Werkzeug==1.0.1
 widgetsnbextension==3.5.1
