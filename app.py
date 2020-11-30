@@ -274,20 +274,71 @@ def parse_contents(covid, school):
     school = pd.read_csv(io.StringIO(school_decoded.decode('utf-8')))
     covid = pd.read_csv(io.StringIO(covid_decoded.decode('utf-8')))
 
-
     school['date'] = pd.to_datetime(school['date'], format = "%d/%m/%Y")
     covid['date'] = pd.to_datetime(covid['date'])
 
     school['date'] = school['date'].dt.strftime("%Y-%m-%d")
     covid['date'] = covid['date'].dt.strftime("%Y-%m-%d")
 
-    school["Physical_education"] = pd.Series()
+    school["Physical_education"] = pd.Series(dtype = 'float')
     school.loc[school["Status"] == "Fully open", "Physical_education"] = 1
     school.loc[school["Status"] == "Partially open", "Physical_education"] = 1.5
     school.loc[school["Status"] == "Closed due to COVID-19", "Physical_education"] = 2
 
 
+    # Pre-processing
+    school = school.dropna(axis=0, subset=['Status'])
+    covid["total_cases"] = covid.groupby("location")["total_cases"].apply(lambda x: x.ffill().fillna(0))
+    covid["new_cases"] = covid.groupby("location")['new_cases'].apply(lambda x: x.fillna(0))
+
+    covid["new_cases_smoothed"] = covid.groupby("location")["new_cases_smoothed"].apply(lambda x: x.fillna(0))
+    covid["total_deaths"] = covid.groupby("location")["total_deaths"].apply(lambda x: x.ffill().fillna(0))
+    covid["new_deaths"] = covid.groupby("location")["new_deaths"].apply(lambda x: x.fillna(0))
+    covid["new_deaths_smoothed"] = covid.groupby("location")["new_deaths_smoothed"].apply(lambda x: x.fillna(0))
+    covid["total_cases_per_million"] = covid.groupby("location")["total_cases_per_million"].apply(lambda x: x.ffill().fillna(0))
+    covid["new_cases_per_million"] = covid.groupby("location")["new_cases_per_million"].apply(lambda x: x.fillna(0))
+    covid["new_cases_smoothed_per_million"] = covid.groupby("location")["new_cases_smoothed_per_million"].apply(lambda x: x.fillna(0))
+    covid["total_deaths_per_million"] = covid.groupby("location")["total_deaths_per_million"].apply(lambda x: x.ffill().fillna(0))
+    covid["new_deaths_per_million"] = covid.groupby("location")["new_deaths_per_million"].apply(lambda x: x.fillna(0))
+    covid["new_deaths_smoothed_per_million"] = covid.groupby("location")["new_deaths_smoothed_per_million"].apply(lambda x: x.fillna(0))
+    covid["reproduction_rate"] = covid.groupby("location")["reproduction_rate"].bfill().fillna(0)
+    covid["icu_patients"] = covid.groupby("location")["icu_patients"].apply(lambda x: x.fillna(0))
+    covid["icu_patients_per_million"] = covid.groupby("location")["icu_patients_per_million"].apply(lambda x: x.fillna(0))
+    covid["hosp_patients"] = covid.groupby("location")["hosp_patients"].apply(lambda x: x.fillna(0))
+    covid["hosp_patients_per_million"] = covid.groupby("location")["hosp_patients_per_million"].apply(lambda x: x.fillna(0))
+    covid["weekly_icu_admissions"] = covid.groupby("location")["weekly_icu_admissions"].apply(lambda x: x.fillna(0))
+    covid["weekly_icu_admissions_per_million"] = covid.groupby("location")["weekly_icu_admissions_per_million"].apply(lambda x: x.fillna(0))
+    covid["weekly_hosp_admissions"] = covid.groupby("location")["weekly_hosp_admissions"].apply(lambda x: x.fillna(0))
+    covid["weekly_hosp_admissions_per_million"] = covid.groupby("location")["weekly_hosp_admissions_per_million"].apply(lambda x: x.fillna(0))
+    covid["total_tests"] = covid.groupby("location")["total_tests"].apply(lambda x: x.ffill().fillna(0))
+    covid["total_tests_per_thousand"] = covid.groupby("location")["total_tests_per_thousand"].apply(lambda x: x.ffill().fillna(0))
+    covid["new_tests"] = covid.groupby("location")["new_tests"].apply(lambda x: x.fillna(0))
+    covid["new_tests_per_thousand"] = covid.groupby("location")["new_tests_per_thousand"].apply(lambda x: x.fillna(0))
+    covid["new_tests_smoothed"] = covid.groupby("location")["new_tests_smoothed"].apply(lambda x: x.fillna(0))
+    covid["new_tests_smoothed_per_thousand"] = covid.groupby("location")["new_tests_smoothed_per_thousand"].apply(lambda x: x.fillna(0))
+    covid["tests_per_case"] = covid.groupby("location")["tests_per_case"].apply(lambda x: x.fillna(0))
+    covid["positive_rate"] = covid.groupby("location")["positive_rate"].apply(lambda x: x.fillna(0))
+    covid["stringency_index"] = covid.groupby("location")["stringency_index"].apply(lambda x: x.fillna(0))
+    covid["population"] = covid.groupby("location")["population"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["population_density"] = covid.groupby("location")["population_density"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["median_age"] = covid.groupby("location")["median_age"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["aged_65_older"] = covid.groupby("location")["aged_65_older"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["aged_70_older"] = covid.groupby("location")["aged_70_older"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["gdp_per_capita"] = covid.groupby("location")["gdp_per_capita"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["extreme_poverty"] = covid.groupby("location")["extreme_poverty"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["cardiovasc_death_rate"] = covid.groupby("location")["cardiovasc_death_rate"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["diabetes_prevalence"] = covid.groupby("location")["diabetes_prevalence"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["female_smokers"] = covid.groupby("location")["female_smokers"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["male_smokers"] = covid.groupby("location")["male_smokers"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["handwashing_facilities"] = covid.groupby("location")["handwashing_facilities"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["hospital_beds_per_thousand"] = covid.groupby("location")["hospital_beds_per_thousand"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["life_expectancy"] = covid.groupby("location")["life_expectancy"].apply(lambda x: x.ffill().bfill().fillna(0))
+    covid["human_development_index"] = covid.groupby("location")["human_development_index"].apply(lambda x: x.ffill().bfill().fillna(0))
+
+    print(covid["new_cases"])
+
     combined_datasets = pd.merge(covid, school, how = 'left', right_on = ['date', 'iso_code'], left_on = ['date', 'iso_code'])
+
 
     return combined_datasets.to_json(date_format='iso', orient='split')
 
@@ -1208,7 +1259,7 @@ def predict_world_cases(filter_value, filter_id, jsonified_data = None):
 
     fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Observation", line_color = "red", x=pd.Series(var_data.index.to_timestamp().values), y=var_data[quantity_to_predict]))
 
-    fig.update_layout(title = prediction_method + "(" + filter_value + ")")
+    fig.update_layout(title = prediction_method + " (" + filter_value + ")")
 
     graph = dcc.Graph(id={'type': 'GRPR', 'index': ind}, figure=fig)
     graph.className = "graph_div graph"
@@ -1405,4 +1456,4 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
