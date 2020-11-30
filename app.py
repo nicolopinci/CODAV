@@ -1195,14 +1195,14 @@ def predict_world_cases(filter_value, filter_id, jsonified_data = None):
         print(exog_test)
         '''
 
-        step_wise = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 3, max_q = 3, m=1, d=2, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
+        step_wise = pm.auto_arima(train, start_p = 1, start_q = 1, test = 'adf', max_p = 5, max_q = 5, m=1, d=2, seasonal=False, start_P = 0, D=0, trace = True, error_action = 'ignore', suppress_warning=True, stepwise = True)
 
         model = SARIMAX(train, order=step_wise.order) 
     
         # New cases per day
         # World (7, 1, 8), Italy (1, 2, 0), Norway (2, 2, 3)
 
-        results = model.fit(disp = False)
+        results = model.fit(low_memory = True, disp = False)
 
         '''
         for i in range(180):
