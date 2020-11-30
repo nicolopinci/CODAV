@@ -53,8 +53,6 @@ import dash_leaflet.express as dlx
 
 import urllib.request
 
-server = app.server
-
 
 covid_data = None
 dimensions = []
@@ -68,6 +66,8 @@ external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/l
 external_scripts = ["static/moveGraphs.js", "https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js", "static/loader.js"]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts)
+
+server = app.server
 
 
 class GraphInfo:
