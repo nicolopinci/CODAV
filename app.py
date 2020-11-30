@@ -49,13 +49,19 @@ from fbprophet import Prophet
 import dash_leaflet as dl
 import dash_leaflet.express as dlx
 
+
+
+import urllib.request
+
+server = app.server
+
+
 covid_data = None
 dimensions = []
 graph_infos = []
 colorblind_colors = ['rgb(27,158,119)','rgb(217,95,2)','rgb(117,112,179)']
 topmap_colors = ['#ffffb2','#fecc5c','#fd8d3c','#e31a1c']
 
-import urllib.request
 
 
 external_stylesheets = ["static/style.css", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"]
@@ -1451,9 +1457,5 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
 
 
-    
-
-
-
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
