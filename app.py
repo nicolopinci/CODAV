@@ -341,8 +341,6 @@ def parse_contents(covid, school):
     covid["life_expectancy"] = covid.groupby("location")["life_expectancy"].apply(lambda x: x.ffill().bfill().fillna(0))
     covid["human_development_index"] = covid.groupby("location")["human_development_index"].apply(lambda x: x.ffill().bfill().fillna(0))
 
-    print(covid["new_cases"])
-
     combined_datasets = pd.merge(covid, school, how = 'left', right_on = ['date', 'iso_code'], left_on = ['date', 'iso_code'])
 
 
@@ -1223,6 +1221,7 @@ def predict_world_cases(filter_value, filter_id, jsonified_data = None):
         fig.add_trace(go.Scatter(mode = graph_info.plot_type, name="Prediction",  line = dict(dash = "dash"), x=pd.Series(sarimax_prediction.index.to_timestamp().values), y=sarimax_prediction))
     elif(prediction_method == "Prophet"):
         train["ds"] = train.index.to_timestamp()
+
         train.rename(columns = {'date': 'ds', quantity_to_predict: 'y'}, inplace = True)
         valid.rename(columns = {'date': 'ds', quantity_to_predict: 'y'}, inplace = True)
 
@@ -1458,4 +1457,4 @@ def update_graph(filter_value, filter_id, start_date, end_date, date_id, slider_
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
